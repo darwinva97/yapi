@@ -14,6 +14,8 @@ export const users = sqliteTable("users", {
   email: text("email"),
   /** Teléfono en formato E.164 (único cuando existe). Para login por celular. */
   phone: text("phone").unique(),
+  /** UID de Firebase Authentication (único). Identidad cuando se usa Firebase. */
+  firebaseUid: text("firebase_uid").unique(),
   /** Color del avatar (hex). */
   color: text("color").notNull(),
   /**

@@ -22,6 +22,13 @@
       "when": 1780766236353,
       "tag": "0002_flippant_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780781960213,
+      "tag": "0003_opposite_raider",
+      "breakpoints": true
     }
   ]
 }

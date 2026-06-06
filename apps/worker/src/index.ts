@@ -47,6 +47,11 @@ import {
 
 import { isWithinSchedule } from "./schedule.js";
 import { fcmConfigured, sendFcm } from "./fcm.js";
+import {
+  verifyFirebaseToken,
+  looksLikeJwt,
+  type FirebaseClaims,
+} from "./firebaseAuth.js";
 
 import { createDb, type Db } from "./db.js";
 import {
@@ -72,6 +77,8 @@ type Bindings = {
   DB: D1Database;
   /** Push directo vía FCM HTTP v1 (preferido): JSON del service account. */
   FIREBASE_SERVICE_ACCOUNT?: string;
+  /** Project id de Firebase para verificar ID tokens (override; si no, del SA). */
+  FIREBASE_PROJECT_ID?: string;
   /** Legacy/opcional: URL del server de push externo (fallback si no hay FCM). */
   PUSH_SERVER_URL?: string;
   /** Opcional: cabecera Authorization para el server de push (Basic ...). */
@@ -348,6 +355,7 @@ async function findOrCreateByEmail(
     handle: await generateHandle(db, name || normEmail),
     email: normEmail,
     phone: null,
+    firebaseUid: null,
     color: randomColor(),
     passwordHash,
     authProvider: provider,
@@ -377,6 +385,7 @@ async function findOrCreateByPhone(
     handle: await generateHandle(db, name || `tel${norm.replace(/\D/g, "")}`),
     email: null,
     phone: norm,
+    firebaseUid: null,
     color: randomColor(),
     passwordHash: null,
     authProvider: "phone",
@@ -386,7 +395,57 @@ async function findOrCreateByPhone(
   return user;
 }
 
-/** Middleware: exige token Bearer válido; deja `user`/`db`/`token` en contexto. */
+/**
+ * Busca un usuario por su UID de Firebase, o lo crea (lo vincula por email si ya
+ * existía una cuenta con ese correo). Identidad cuando se usa Firebase Auth.
+ */
+async function findOrCreateByFirebase(
+  db: Db,
+  claims: FirebaseClaims,
+): Promise<DbUser> {
+  const byUid = await db
+    .select()
+    .from(users)
+    .where(eq(users.firebaseUid, claims.uid))
+    .get();
+  if (byUid) return byUid;
+
+  const email = claims.email?.trim().toLowerCase() ?? null;
+
+  // Vincular con una cuenta existente del mismo correo (migración suave).
+  if (email) {
+    const byEmail = await db.select().from(users).where(eq(users.email, email)).get();
+    if (byEmail) {
+      await db
+        .update(users)
+        .set({ firebaseUid: claims.uid })
+        .where(eq(users.id, byEmail.id));
+      return { ...byEmail, firebaseUid: claims.uid };
+    }
+  }
+
+  const base =
+    claims.name || email || (claims.phone ? `tel${claims.phone.replace(/\D/g, "")}` : "user");
+  const user: DbUser = {
+    id: crypto.randomUUID(),
+    name: claims.name?.trim() || email?.split("@")[0] || claims.phone || "Usuario",
+    handle: await generateHandle(db, base),
+    email,
+    phone: claims.phone ?? null,
+    firebaseUid: claims.uid,
+    color: randomColor(),
+    passwordHash: null,
+    authProvider: claims.provider ?? "firebase",
+    createdAt: new Date().toISOString(),
+  };
+  await db.insert(users).values(user);
+  return user;
+}
+
+/**
+ * Middleware: exige un Bearer válido. Acepta un **ID token de Firebase** (JWT) o,
+ * de forma transitoria, un token de sesión legacy. Deja `user`/`db`/`token`.
+ */
 const requireAuth: MiddlewareHandler<{
   Bindings: Bindings;
   Variables: Variables;
@@ -394,8 +453,20 @@ const requireAuth: MiddlewareHandler<{
   const token = bearerToken(c.req.header("Authorization"));
   if (!token) return c.json({ error: "No autenticado" }, 401);
   const db = createDb(c.env.DB);
-  const user = await userFromToken(db, token);
+
+  let user: DbUser | null = null;
+  if (looksLikeJwt(token)) {
+    try {
+      const claims = await verifyFirebaseToken(token, c.env);
+      user = await findOrCreateByFirebase(db, claims);
+    } catch {
+      return c.json({ error: "Token de Firebase inválido" }, 401);
+    }
+  } else {
+    user = await userFromToken(db, token); // sesión legacy (en retiro)
+  }
   if (!user) return c.json({ error: "Sesión inválida o expirada" }, 401);
+
   c.set("db", db);
   c.set("user", user);
   c.set("token", token);
@@ -447,6 +518,7 @@ app.post("/auth/register", async (c) => {
     handle,
     email: parsed.data.email ?? null,
     phone: null,
+    firebaseUid: null,
     color: PALETTE[Math.floor(Math.random() * PALETTE.length)]!,
     passwordHash: await hashPassword(parsed.data.password),
     authProvider: "password",
