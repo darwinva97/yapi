@@ -9,10 +9,6 @@ import {
 } from "@yapi/db/schema";
 
 import type { Db } from "./db.js";
-import { hashPassword } from "./auth.js";
-
-/** Contraseña de todos los usuarios sembrados (demo). */
-const DEMO_PASSWORD = "123456";
 
 const SEED_USERS = [
   { id: "me", name: "Admin", handle: "admin", email: "admin@yapi.app", color: "#2f6fed" },
@@ -83,7 +79,6 @@ export async function seedIfEmpty(db: Db): Promise<boolean> {
   if (existing.length > 0) return false;
 
   const now = new Date().toISOString();
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
 
   await db.insert(users).values(
     SEED_USERS.map((u) => ({
@@ -92,7 +87,6 @@ export async function seedIfEmpty(db: Db): Promise<boolean> {
       handle: u.handle,
       email: u.email,
       color: u.color,
-      passwordHash,
       createdAt: now,
     })),
   );

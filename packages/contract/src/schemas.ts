@@ -27,17 +27,10 @@ export type OkResponse = z.infer<typeof OkResponse>;
 /* Usuarios y autenticación                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** Proveedores de inicio de sesión soportados. */
-export const AuthProvider = z.enum([
-  "password",
-  "email",
-  "google",
-  "facebook",
-  "phone",
-]);
-export type AuthProvider = z.infer<typeof AuthProvider>;
-
-/** Usuario público (nunca incluye el hash de la contraseña). */
+/**
+ * Usuario público. La identidad la gestiona Firebase Authentication (el cliente
+ * obtiene el ID token y el worker lo verifica); aquí solo van los datos de perfil.
+ */
 export const User = z.object({
   id: z.string(),
   name: z.string(),
@@ -47,77 +40,6 @@ export const User = z.object({
   color: z.string(),
 });
 export type User = z.infer<typeof User>;
-
-export const LoginInput = z.object({
-  /** Usuario (handle), con o sin "@". */
-  handle: z.string().min(1),
-  password: z.string().min(1),
-});
-export type LoginInput = z.infer<typeof LoginInput>;
-
-export const RegisterInput = z.object({
-  handle: z.string().min(1),
-  name: z.string().min(1).optional(),
-  email: z.string().optional(),
-  password: z.string().min(6),
-});
-export type RegisterInput = z.infer<typeof RegisterInput>;
-
-/* --- Correo (email + contraseña) --- */
-
-export const EmailRegisterInput = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-  name: z.string().min(1).optional(),
-});
-export type EmailRegisterInput = z.infer<typeof EmailRegisterInput>;
-
-export const EmailLoginInput = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-export type EmailLoginInput = z.infer<typeof EmailLoginInput>;
-
-/* --- Google / Facebook (OAuth/OIDC) --- */
-
-/**
- * Inicio de sesión con un proveedor externo. `credential` es el token que
- * entrega el proveedor en el cliente:
- *  - Google: el ID token (JWT) de Google Identity Services.
- *  - Facebook: el access token de Facebook Login.
- * En desarrollo (modo mock) se acepta `mock:<email>:<nombre>`.
- */
-export const OAuthInput = z.object({
-  credential: z.string().min(1),
-});
-export type OAuthInput = z.infer<typeof OAuthInput>;
-
-/* --- Celular (OTP por SMS) --- */
-
-export const PhoneStartInput = z.object({
-  /** Teléfono en formato internacional, p. ej. "+51999888777". */
-  phone: z.string().min(6),
-});
-export type PhoneStartInput = z.infer<typeof PhoneStartInput>;
-
-export const PhoneStartResponse = z.object({
-  sent: z.boolean(),
-  /** Sólo presente en desarrollo: el código para poder probar sin SMS real. */
-  devCode: z.string().optional(),
-});
-export type PhoneStartResponse = z.infer<typeof PhoneStartResponse>;
-
-export const PhoneVerifyInput = z.object({
-  phone: z.string().min(6),
-  code: z.string().min(4),
-  /** Nombre para mostrar (sólo se usa al crear la cuenta la primera vez). */
-  name: z.string().min(1).optional(),
-});
-export type PhoneVerifyInput = z.infer<typeof PhoneVerifyInput>;
-
-/** Login/registro correctos: token Bearer + usuario. */
-export const AuthResponse = z.object({ token: z.string(), user: User });
-export type AuthResponse = z.infer<typeof AuthResponse>;
 
 /* -------------------------------------------------------------------------- */
 /* Apps y horario                                                              */

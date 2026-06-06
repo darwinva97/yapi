@@ -152,7 +152,9 @@ export async function verifyFirebaseToken(
   };
 }
 
-/** ¿Parece un JWT (ID token de Firebase) y no un token de sesión legacy? */
-export function looksLikeJwt(token: string): boolean {
-  return token.split(".").length === 3;
+/** Extrae el token `Bearer` de la cabecera Authorization. */
+export function bearerToken(authHeader: string | undefined | null): string | null {
+  if (!authHeader) return null;
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  return m ? (m[1] ?? null) : null;
 }

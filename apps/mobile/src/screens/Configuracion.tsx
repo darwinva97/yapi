@@ -182,12 +182,8 @@ function PerfilTab({ onLogout }: { onLogout: () => void }) {
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    // El logout invalida la sesión en el server; aunque falle la red, cerramos local.
-    try {
-      await api.call("logout");
-    } catch {
-      /* noop */
-    }
+    // Con Firebase Auth el cierre de sesión es del lado del cliente: descartamos
+    // la sesión local (ID + refresh token). No hay sesión que invalidar en el server.
     clearSession();
     onLogout();
   }

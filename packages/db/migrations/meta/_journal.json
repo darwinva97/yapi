@@ -29,6 +29,13 @@
       "when": 1780781960213,
       "tag": "0003_opposite_raider",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780783446313,
+      "tag": "0004_soft_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

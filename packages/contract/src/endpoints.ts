@@ -61,62 +61,8 @@ export const endpoints = {
   }),
 
   /* --------------------------- auth (worker) ----------------------- */
-  register: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/register",
-    input: s.RegisterInput,
-    output: s.AuthResponse,
-  }),
-  login: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/login",
-    input: s.LoginInput,
-    output: s.AuthResponse,
-  }),
-  emailRegister: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/email/register",
-    input: s.EmailRegisterInput,
-    output: s.AuthResponse,
-  }),
-  emailLogin: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/email/login",
-    input: s.EmailLoginInput,
-    output: s.AuthResponse,
-  }),
-  googleAuth: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/google",
-    input: s.OAuthInput,
-    output: s.AuthResponse,
-  }),
-  facebookAuth: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/facebook",
-    input: s.OAuthInput,
-    output: s.AuthResponse,
-  }),
-  phoneStart: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/phone/start",
-    input: s.PhoneStartInput,
-    output: s.PhoneStartResponse,
-  }),
-  phoneVerify: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/phone/verify",
-    input: s.PhoneVerifyInput,
-    output: s.AuthResponse,
-  }),
+  // La identidad la gestiona Firebase Auth en el cliente; el worker verifica el
+  // ID token. `me` devuelve (creando en el primer acceso) el usuario actual.
   me: def({
     service: "worker",
     method: "GET",
@@ -124,14 +70,6 @@ export const endpoints = {
     auth: "bearer",
     input: z.void(),
     output: s.User,
-  }),
-  logout: def({
-    service: "worker",
-    method: "POST",
-    path: "/auth/logout",
-    auth: "bearer",
-    input: z.void(),
-    output: s.OkResponse,
   }),
 
   /* -------------------------- usuarios (worker) -------------------- */

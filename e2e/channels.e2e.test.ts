@@ -1,24 +1,24 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { clientFor, uniq, workerUp } from "./helpers.js";
-
-const anon = clientFor();
+import { newFirebaseUser, uniq, workerUp } from "./helpers.js";
 
 let up = false;
+let fbReady = false;
 beforeAll(async () => {
   up = await workerUp();
+  if (up) fbReady = (await newFirebaseUser()) !== null;
 });
 
-/** Crea un usuario nuevo vía Google mock y devuelve su cliente autenticado. */
-async function newUser(tag: string) {
-  const email = `${uniq(tag)}@gmail.com`;
-  const res = await anon.call("googleAuth", { credential: `mock:${email}:${tag}` });
-  return { client: clientFor(res.token), user: res.user };
+/** Crea un usuario nuevo (Firebase email/password) y su cliente autenticado. */
+async function newUser(_tag: string) {
+  const u = await newFirebaseUser();
+  if (!u) throw new Error("Firebase email/password no habilitado");
+  return u;
 }
 
 describe("canales: dueño y visibilidad (Todos)", () => {
   it("el dueño ve su canal; un extraño NO lo ve en su lista", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("owner");
     const stranger = await newUser("stranger");
 
@@ -41,7 +41,7 @@ describe("canales: dueño y visibilidad (Todos)", () => {
   });
 
   it("un no-dueño no puede editar el canal (403)", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("owner2");
     const stranger = await newUser("stranger2");
 
@@ -60,7 +60,7 @@ describe("canales: dueño y visibilidad (Todos)", () => {
   });
 
   it("un invitado pendiente NO ve el canal hasta aceptar; tras aceptar sí", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("owner3");
     const member = await newUser("member3");
 
@@ -89,7 +89,7 @@ describe("canales: dueño y visibilidad (Todos)", () => {
 
 describe("dispositivos", () => {
   it("registra y lista dispositivos del usuario", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const { client } = await newUser("dev");
 
     const device = await client.call("registerDevice", {

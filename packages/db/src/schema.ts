@@ -18,40 +18,10 @@ export const users = sqliteTable("users", {
   firebaseUid: text("firebase_uid").unique(),
   /** Color del avatar (hex). */
   color: text("color").notNull(),
-  /**
-   * Hash de la contraseña (PBKDF2, ver apps/worker/src/auth.ts). `null` para
-   * cuentas creadas por proveedor externo (Google/Facebook) o por celular.
-   */
-  passwordHash: text("password_hash"),
-  /** Método principal de alta: password | email | google | facebook | phone. */
-  authProvider: text("auth_provider").notNull().default("password"),
+  /** Proveedor con el que entró (Firebase: password | google.com | ...). */
+  authProvider: text("auth_provider").notNull().default("firebase"),
   createdAt: text("created_at").notNull(),
 });
-
-/**
- * Códigos OTP de inicio de sesión por celular. Se borran al verificarse o al
- * expirar. En desarrollo el código se devuelve en la respuesta (`devCode`).
- */
-export const phoneCodes = sqliteTable("phone_codes", {
-  phone: text("phone").primaryKey(),
-  code: text("code").notNull(),
-  expiresAt: text("expires_at").notNull(),
-  createdAt: text("created_at").notNull(),
-});
-
-/** Sesiones activas: un token Bearer por inicio de sesión. */
-export const sessions = sqliteTable(
-  "sessions",
-  {
-    token: text("token").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    createdAt: text("created_at").notNull(),
-    expiresAt: text("expires_at").notNull(),
-  },
-  (t) => [index("sessions_user_idx").on(t.userId)],
-);
 
 /** Canales. Cada canal tiene un publicador (propietario) que es quien lo edita. */
 export const channels = sqliteTable(
@@ -209,9 +179,6 @@ export const pushLog = sqliteTable("push_log", {
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type Session = typeof sessions.$inferSelect;
-export type PhoneCode = typeof phoneCodes.$inferSelect;
-export type NewPhoneCode = typeof phoneCodes.$inferInsert;
 export type Channel = typeof channels.$inferSelect;
 export type NewChannel = typeof channels.$inferInsert;
 export type ChannelSubscriber = typeof channelSubscribers.$inferSelect;

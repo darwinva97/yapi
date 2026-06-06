@@ -23,17 +23,14 @@ function stubFetch(response: {
   return () => calls[calls.length - 1]!;
 }
 
-const AUTH_BODY = {
-  token: "tok-123",
-  user: {
-    id: "u1",
-    name: "Ana",
-    handle: "ana",
-    email: "ana@x.com",
-    phone: null,
-    color: "#fff",
-    createdAt: "2026-01-01T00:00:00.000Z",
-  },
+const DEVICE_BODY = {
+  id: "d1",
+  name: "Tel",
+  platform: "android",
+  notifier: true,
+  hasToken: false,
+  apps: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 describe("createClient", () => {
@@ -41,7 +38,7 @@ describe("createClient", () => {
 
   it("falta baseUrl → ContractError status 0", async () => {
     const api = createClient({ baseUrls: {} });
-    await expect(api.call("login", { handle: "a", password: "b" })).rejects.toMatchObject({
+    await expect(api.call("registerDevice", { name: "Tel" })).rejects.toMatchObject({
       status: 0,
     });
   });
@@ -49,7 +46,7 @@ describe("createClient", () => {
   describe("con fetch stubbeado", () => {
     let lastCall: () => FetchArgs;
     beforeEach(() => {
-      lastCall = stubFetch({ ok: true, status: 200, body: AUTH_BODY });
+      lastCall = stubFetch({ ok: true, status: 200, body: DEVICE_BODY });
     });
 
     it("hace POST con cuerpo JSON y Content-Type", async () => {
@@ -57,17 +54,20 @@ describe("createClient", () => {
         baseUrls: { worker: "http://w.test" },
         headers: { Authorization: "Bearer xyz" },
       });
-      const res = await api.call("login", { handle: "ana", password: "secret" });
+      const res = await api.call("registerDevice", { name: "Tel", platform: "android" });
 
       const { url, init } = lastCall();
-      expect(url).toBe("http://w.test/auth/login");
+      expect(url).toBe("http://w.test/devices");
       expect(init.method).toBe("POST");
       expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
         "application/json",
       );
       expect((init.headers as Record<string, string>).Authorization).toBe("Bearer xyz");
-      expect(JSON.parse(init.body as string)).toEqual({ handle: "ana", password: "secret" });
-      expect(res.token).toBe("tok-123");
+      expect(JSON.parse(init.body as string)).toMatchObject({
+        name: "Tel",
+        platform: "android",
+      });
+      expect(res.id).toBe("d1");
     });
 
     it("sustituye (y codifica) los parámetros de ruta (:id)", async () => {
@@ -86,8 +86,8 @@ describe("createClient", () => {
         baseUrls: { worker: "http://w.test" },
         headers: () => ({ Authorization: `Bearer ${++n}` }),
       });
-      await api.call("login", { handle: "a", password: "b" });
-      await api.call("login", { handle: "a", password: "b" });
+      await api.call("registerDevice", { name: "a" });
+      await api.call("registerDevice", { name: "b" });
       expect((lastCall().init.headers as Record<string, string>).Authorization).toBe(
         "Bearer 2",
       );
@@ -98,20 +98,27 @@ describe("createClient", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const api = createClient({ baseUrls: { worker: "http://w.test" } });
-    // password vacío viola LoginInput (min 1)
-    await expect(api.call("login", { handle: "a", password: "" })).rejects.toBeInstanceOf(
-      Error,
-    );
+    // name vacío viola CreateChannelInput (min 1)
+    await expect(
+      api.call("createChannel", {
+        name: "",
+        description: "",
+        enabled: true,
+        subscriberIds: [],
+        deviceIds: [],
+        appIds: [],
+      }),
+    ).rejects.toBeInstanceOf(Error);
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
   it("respuesta no-2xx → ContractError con el mensaje del servidor", async () => {
-    stubFetch({ ok: false, status: 401, body: { error: "Credenciales inválidas" } });
+    stubFetch({ ok: false, status: 401, body: { error: "Token inválido" } });
     const api = createClient({ baseUrls: { worker: "http://w.test" } });
-    await expect(api.call("login", { handle: "a", password: "b" })).rejects.toMatchObject({
+    await expect(api.call("registerDevice", { name: "Tel" })).rejects.toMatchObject({
       status: 401,
-      message: "Credenciales inválidas",
+      message: "Token inválido",
     });
     expect(ContractError).toBeTruthy();
     vi.unstubAllGlobals();

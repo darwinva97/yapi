@@ -1,4 +1,4 @@
-import { Hono, type Context, type MiddlewareHandler } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { eq, and, inArray } from "drizzle-orm";
@@ -20,13 +20,6 @@ import {
 } from "@yapi/db/schema";
 import type { D1Database } from "@cloudflare/workers-types";
 import {
-  RegisterInput,
-  LoginInput,
-  EmailRegisterInput,
-  EmailLoginInput,
-  OAuthInput,
-  PhoneStartInput,
-  PhoneVerifyInput,
   CreateChannelInput,
   UpdateChannelInput,
   CreateNotificationInput,
@@ -34,7 +27,6 @@ import {
   UpdateDeviceInput,
   IngestInput,
   type HealthResponse,
-  type AuthProvider,
   type User as ApiUser,
   type Channel as ApiChannel,
   type ChannelNotification as ApiNotification,
@@ -49,28 +41,11 @@ import { isWithinSchedule } from "./schedule.js";
 import { fcmConfigured, sendFcm } from "./fcm.js";
 import {
   verifyFirebaseToken,
-  looksLikeJwt,
+  bearerToken,
   type FirebaseClaims,
 } from "./firebaseAuth.js";
 
 import { createDb, type Db } from "./db.js";
-import {
-  hashPassword,
-  verifyPassword,
-  createSession,
-  destroySession,
-  bearerToken,
-  userFromToken,
-} from "./auth.js";
-import {
-  AuthError,
-  verifyGoogle,
-  verifyFacebook,
-  startPhone,
-  checkPhoneCode,
-  normalizePhone,
-  type Identity,
-} from "./providers.js";
 import { seedIfEmpty } from "./seed.js";
 
 type Bindings = {
@@ -333,68 +308,6 @@ async function generateHandle(db: Db, base: string): Promise<string> {
   return `${slug}${crypto.randomUUID().slice(0, 6)}`;
 }
 
-/** Busca un usuario por email o lo crea (cuentas Google/Facebook/correo). */
-async function findOrCreateByEmail(
-  db: Db,
-  email: string,
-  name: string | null,
-  provider: AuthProvider,
-  passwordHash: string | null = null,
-): Promise<DbUser> {
-  const normEmail = email.trim().toLowerCase();
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, normEmail))
-    .get();
-  if (existing) return existing;
-
-  const user: DbUser = {
-    id: crypto.randomUUID(),
-    name: name?.trim() || normEmail.split("@")[0]!,
-    handle: await generateHandle(db, name || normEmail),
-    email: normEmail,
-    phone: null,
-    firebaseUid: null,
-    color: randomColor(),
-    passwordHash,
-    authProvider: provider,
-    createdAt: new Date().toISOString(),
-  };
-  await db.insert(users).values(user);
-  return user;
-}
-
-/** Busca un usuario por teléfono o lo crea (login por celular). */
-async function findOrCreateByPhone(
-  db: Db,
-  phone: string,
-  name: string | null,
-): Promise<DbUser> {
-  const norm = normalizePhone(phone);
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.phone, norm))
-    .get();
-  if (existing) return existing;
-
-  const user: DbUser = {
-    id: crypto.randomUUID(),
-    name: name?.trim() || norm,
-    handle: await generateHandle(db, name || `tel${norm.replace(/\D/g, "")}`),
-    email: null,
-    phone: norm,
-    firebaseUid: null,
-    color: randomColor(),
-    passwordHash: null,
-    authProvider: "phone",
-    createdAt: new Date().toISOString(),
-  };
-  await db.insert(users).values(user);
-  return user;
-}
-
 /**
  * Busca un usuario por su UID de Firebase, o lo crea (lo vincula por email si ya
  * existía una cuenta con ese correo). Identidad cuando se usa Firebase Auth.
@@ -434,7 +347,6 @@ async function findOrCreateByFirebase(
     phone: claims.phone ?? null,
     firebaseUid: claims.uid,
     color: randomColor(),
-    passwordHash: null,
     authProvider: claims.provider ?? "firebase",
     createdAt: new Date().toISOString(),
   };
@@ -443,8 +355,9 @@ async function findOrCreateByFirebase(
 }
 
 /**
- * Middleware: exige un Bearer válido. Acepta un **ID token de Firebase** (JWT) o,
- * de forma transitoria, un token de sesión legacy. Deja `user`/`db`/`token`.
+ * Middleware: exige un **ID token de Firebase** válido (Authorization: Bearer).
+ * Verifica el token, mapea/crea el usuario por `firebase_uid` y deja
+ * `user`/`db`/`token` en el contexto.
  */
 const requireAuth: MiddlewareHandler<{
   Bindings: Bindings;
@@ -454,18 +367,13 @@ const requireAuth: MiddlewareHandler<{
   if (!token) return c.json({ error: "No autenticado" }, 401);
   const db = createDb(c.env.DB);
 
-  let user: DbUser | null = null;
-  if (looksLikeJwt(token)) {
-    try {
-      const claims = await verifyFirebaseToken(token, c.env);
-      user = await findOrCreateByFirebase(db, claims);
-    } catch {
-      return c.json({ error: "Token de Firebase inválido" }, 401);
-    }
-  } else {
-    user = await userFromToken(db, token); // sesión legacy (en retiro)
+  let user: DbUser;
+  try {
+    const claims = await verifyFirebaseToken(token, c.env);
+    user = await findOrCreateByFirebase(db, claims);
+  } catch {
+    return c.json({ error: "Token inválido o expirado" }, 401);
   }
-  if (!user) return c.json({ error: "Sesión inválida o expirada" }, 401);
 
   c.set("db", db);
   c.set("user", user);
@@ -493,162 +401,9 @@ app.post("/dev/seed", async (c) => {
   return c.json({ seeded });
 });
 
-/* ----- auth (públicas) ----- */
-
-app.post("/auth/register", async (c) => {
-  const parsed = RegisterInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) {
-    return c.json({ error: "Datos de registro inválidos" }, 400);
-  }
-  const db = createDb(c.env.DB);
-  const handle = normalizeHandle(parsed.data.handle);
-  if (!handle) return c.json({ error: "Usuario inválido" }, 400);
-
-  const existing = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.handle, handle))
-    .get();
-  if (existing) return c.json({ error: "Ese usuario ya existe" }, 409);
-
-  const id = crypto.randomUUID();
-  const user: DbUser = {
-    id,
-    name: parsed.data.name?.trim() || handle,
-    handle,
-    email: parsed.data.email ?? null,
-    phone: null,
-    firebaseUid: null,
-    color: PALETTE[Math.floor(Math.random() * PALETTE.length)]!,
-    passwordHash: await hashPassword(parsed.data.password),
-    authProvider: "password",
-    createdAt: new Date().toISOString(),
-  };
-  await db.insert(users).values(user);
-  const token = await createSession(db, id);
-  return c.json({ token, user: toApiUser(user) }, 201);
-});
-
-app.post("/auth/login", async (c) => {
-  const parsed = LoginInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "Datos inválidos" }, 400);
-
-  const db = createDb(c.env.DB);
-  const handle = normalizeHandle(parsed.data.handle);
-  const user = await db.select().from(users).where(eq(users.handle, handle)).get();
-  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
-    return c.json({ error: "Usuario o contraseña incorrectos" }, 401);
-  }
-  const token = await createSession(db, user.id);
-  return c.json({ token, user: toApiUser(user) });
-});
-
-/* ----- auth: correo (email + contraseña) ----- */
-
-app.post("/auth/email/register", async (c) => {
-  const parsed = EmailRegisterInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "Datos de registro inválidos" }, 400);
-  const db = createDb(c.env.DB);
-  const email = parsed.data.email.trim().toLowerCase();
-
-  const existing = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, email))
-    .get();
-  if (existing) return c.json({ error: "Ese correo ya está registrado" }, 409);
-
-  const user = await findOrCreateByEmail(
-    db,
-    email,
-    parsed.data.name ?? null,
-    "email",
-    await hashPassword(parsed.data.password),
-  );
-  const token = await createSession(db, user.id);
-  return c.json({ token, user: toApiUser(user) }, 201);
-});
-
-app.post("/auth/email/login", async (c) => {
-  const parsed = EmailLoginInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "Datos inválidos" }, 400);
-  const db = createDb(c.env.DB);
-  const email = parsed.data.email.trim().toLowerCase();
-  const user = await db.select().from(users).where(eq(users.email, email)).get();
-  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
-    return c.json({ error: "Correo o contraseña incorrectos" }, 401);
-  }
-  const token = await createSession(db, user.id);
-  return c.json({ token, user: toApiUser(user) });
-});
-
-/* ----- auth: Google / Facebook (OAuth) ----- */
-
-async function oauthLogin(
-  c: Context<{ Bindings: Bindings; Variables: Variables }>,
-  provider: "google" | "facebook",
-): Promise<Response> {
-  const parsed = OAuthInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "Falta la credencial" }, 400);
-  const db = createDb(c.env.DB);
-  try {
-    const identity: Identity =
-      provider === "google"
-        ? await verifyGoogle(parsed.data.credential, c.env)
-        : await verifyFacebook(parsed.data.credential, c.env);
-    if (!identity.email) {
-      return c.json(
-        { error: `${provider} no entregó un email para tu cuenta` },
-        400,
-      );
-    }
-    const user = await findOrCreateByEmail(
-      db,
-      identity.email,
-      identity.name,
-      provider,
-    );
-    const token = await createSession(db, user.id);
-    return c.json({ token, user: toApiUser(user) });
-  } catch (e) {
-    if (e instanceof AuthError) return c.json({ error: e.message }, e.status as 401);
-    return c.json({ error: "No se pudo iniciar sesión" }, 401);
-  }
-}
-
-app.post("/auth/google", (c) => oauthLogin(c, "google"));
-app.post("/auth/facebook", (c) => oauthLogin(c, "facebook"));
-
-/* ----- auth: celular (OTP por SMS) ----- */
-
-app.post("/auth/phone/start", async (c) => {
-  const parsed = PhoneStartInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "Teléfono inválido" }, 400);
-  const db = createDb(c.env.DB);
-  try {
-    const out = await startPhone(db, c.env, parsed.data.phone);
-    return c.json(out);
-  } catch (e) {
-    if (e instanceof AuthError) return c.json({ error: e.message }, e.status as 502);
-    return c.json({ error: "No se pudo enviar el código" }, 502);
-  }
-});
-
-app.post("/auth/phone/verify", async (c) => {
-  const parsed = PhoneVerifyInput.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "Datos inválidos" }, 400);
-  const db = createDb(c.env.DB);
-  const ok = await checkPhoneCode(db, parsed.data.phone, parsed.data.code);
-  if (!ok) return c.json({ error: "Código incorrecto o expirado" }, 401);
-  const user = await findOrCreateByPhone(db, parsed.data.phone, parsed.data.name ?? null);
-  const token = await createSession(db, user.id);
-  return c.json({ token, user: toApiUser(user) });
-});
-
 /* ----- auth (protegidas) ----- */
 
 app.use("/auth/me", requireAuth);
-app.use("/auth/logout", requireAuth);
 app.use("/users", requireAuth);
 app.use("/users/*", requireAuth);
 app.use("/channels", requireAuth);
@@ -660,10 +415,6 @@ app.use("/ingest", requireAuth);
 
 app.get("/auth/me", (c) => c.json(toApiUser(c.get("user"))));
 
-app.post("/auth/logout", async (c) => {
-  await destroySession(c.get("db"), c.get("token"));
-  return c.json({ ok: true });
-});
 
 /* ----- usuarios ----- */
 

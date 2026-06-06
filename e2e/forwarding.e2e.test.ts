@@ -1,19 +1,19 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { clientFor, uniq, workerUp } from "./helpers.js";
-
-const anon = clientFor();
+import { newFirebaseUser, uniq, workerUp } from "./helpers.js";
 
 let up = false;
+let fbReady = false;
 beforeAll(async () => {
   up = await workerUp();
+  if (up) fbReady = (await newFirebaseUser()) !== null;
 });
 
-/** Crea un usuario nuevo (Google mock) y devuelve su cliente autenticado. */
-async function newUser(tag: string) {
-  const email = `${uniq(tag)}@gmail.com`;
-  const res = await anon.call("googleAuth", { credential: `mock:${email}:${tag}` });
-  return { client: clientFor(res.token), user: res.user };
+/** Crea un usuario nuevo (Firebase email/password) y su cliente autenticado. */
+async function newUser(_tag: string) {
+  const u = await newFirebaseUser();
+  if (!u) throw new Error("Firebase email/password no habilitado");
+  return u;
 }
 
 /** Índice de día (0=Lun) en UTC que NO es hoy, para forzar fuera-de-horario. */
@@ -24,7 +24,7 @@ function notTodayUtc(): number {
 
 describe("reenviador: ingesta → enrutamiento → notificación", () => {
   it("reenvía a los canales que enrutan el dispositivo+app dentro de horario", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("fwd-owner");
     const pkg = `com.test.${uniq("app").replace(/-/g, "")}`;
 
@@ -63,7 +63,7 @@ describe("reenviador: ingesta → enrutamiento → notificación", () => {
   });
 
   it("no reenvía si la app no es objetivo del canal", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("fwd-owner2");
     const pkgA = `com.a.${uniq("x").replace(/-/g, "")}`;
     const pkgB = `com.b.${uniq("y").replace(/-/g, "")}`;
@@ -98,7 +98,7 @@ describe("reenviador: ingesta → enrutamiento → notificación", () => {
   });
 
   it("no reenvía fuera del horario configurado", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("fwd-owner3");
     const pkg = `com.sched.${uniq("z").replace(/-/g, "")}`;
     const device = await owner.client.call("registerDevice", {
@@ -129,7 +129,7 @@ describe("reenviador: ingesta → enrutamiento → notificación", () => {
   });
 
   it("ingesta desde un dispositivo ajeno → 404", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("fwd-owner4");
     const stranger = await newUser("fwd-stranger");
     const device = await owner.client.call("registerDevice", {
@@ -150,7 +150,7 @@ describe("reenviador: ingesta → enrutamiento → notificación", () => {
 
 describe("invitaciones: aceptar / rechazar", () => {
   it("invitado NO ve el canal hasta aceptar; tras aceptar es miembro", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("inv-owner");
     const member = await newUser("inv-member");
 
@@ -187,7 +187,7 @@ describe("invitaciones: aceptar / rechazar", () => {
   });
 
   it("rechazar elimina la invitación", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("inv-owner2");
     const member = await newUser("inv-member2");
     const channel = await owner.client.call("createChannel", {
@@ -209,7 +209,7 @@ describe("invitaciones: aceptar / rechazar", () => {
   });
 
   it("una publicación reenviada aparece en el feed de un miembro aceptado", async () => {
-    if (!up) return;
+    if (!up || !fbReady) return;
     const owner = await newUser("feed-owner");
     const member = await newUser("feed-member");
     const channel = await owner.client.call("createChannel", {
