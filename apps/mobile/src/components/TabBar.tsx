@@ -37,7 +37,15 @@ export function TabBar({
             traits="tabbar"
             value={on ? "seleccionado" : undefined}
             onTap={() => onChange(t.key)}
-            style={{ flex: 1, alignItems: "center", paddingTop: "2px", paddingBottom: "2px" }}
+            style={{
+              // `flex: 1` colapsa el ancho en Lynx nativo; ancho explícito 1/3.
+              width: "33.33%",
+              flexGrow: 1,
+              flexBasis: "33.33%",
+              alignItems: "center",
+              paddingTop: "2px",
+              paddingBottom: "2px",
+            }}
           >
             {/* Icono y etiqueta son decorativos: el nombre accesible lo da Pressable. */}
             <text

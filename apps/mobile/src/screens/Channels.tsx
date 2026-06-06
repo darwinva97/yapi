@@ -130,7 +130,11 @@ export function Channels({
               value={on ? "seleccionado" : undefined}
               onTap={() => setFilter(f.key)}
               style={{
-                flex: 1,
+                // En Lynx nativo `flex: 1` colapsa el ancho del hijo en una
+                // fila; usamos ancho explícito (1/3 por filtro) para repartir.
+                width: "33.33%",
+                flexGrow: 1,
+                flexBasis: "33.33%",
                 alignItems: "center",
                 paddingTop: "9px",
                 paddingBottom: "9px",
