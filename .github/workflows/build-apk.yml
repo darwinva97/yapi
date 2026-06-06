@@ -1,0 +1,74 @@
+name: Build APK
+
+# Genera el APK Android (debug, instalable) en cada tag `v*` y bajo demanda.
+# - En tags: además lo adjunta a la Release de GitHub.
+# - Siempre: lo sube como artifact descargable del run.
+#
+# El APK debug se firma con la clave de debug (sirve para instalar/probar). Para
+# Play Store hace falta firma de release (keystore como secreto) — pendiente.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      worker_url:
+        description: "URL del worker (se inyecta en el bundle)"
+        default: "https://yapi-worker.darwin-sva-97.workers.dev"
+      server_url:
+        description: "URL del server de push (el push ya sale del worker; informativo)"
+        default: "https://yapi-worker.darwin-sva-97.workers.dev"
+
+permissions:
+  contents: write # para adjuntar el APK a la Release en tags
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Lynx bundle (inyecta URLs)
+        run: pnpm --filter @yapi/mobile build
+        env:
+          YAPI_WORKER_URL: ${{ github.event.inputs.worker_url || 'https://yapi-worker.darwin-sva-97.workers.dev' }}
+          YAPI_SERVER_URL: ${{ github.event.inputs.server_url || 'https://yapi-worker.darwin-sva-97.workers.dev' }}
+
+      - name: Copiar bundle a los assets del host Android
+        run: cp apps/mobile/dist/main.lynx.bundle apps/mobile/native/android/app/src/main/assets/main.lynx.bundle
+
+      - name: Build APK (debug)
+        working-directory: apps/mobile/native/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Subir APK como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yapi-debug-apk
+          path: apps/mobile/native/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Adjuntar APK a la Release (solo en tags)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/mobile/native/android/app/build/outputs/apk/debug/app-debug.apk
