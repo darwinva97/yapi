@@ -1,0 +1,4 @@
+{
+  "extends": "@yapi/tsconfig/base.json",
+  "include": ["src"]
+}

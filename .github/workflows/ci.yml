@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm check-types
+
+      - run: pnpm build
+        env:
+          # En CI/CD NO se usa el fichero serviceAccountKey.json (gitignored).
+          # firebase-admin lee este secret con el JSON completo de la service account.
+          # Configúralo en: Settings → Secrets and variables → Actions.
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+  # Ejemplo de despliegue del server a la VPS (adáptalo a tu método: ssh/rsync, pm2, Docker…).
+  # deploy-server:
+  #   needs: build
+  #   if: github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - ...build y subida...
+  #     # En la VPS, el proceso arranca con estas variables de entorno (sin .env):
+  #     #   FIREBASE_SERVICE_ACCOUNT  -> JSON de la service account (secret)
+  #     #   DB_DRIVER=d1-http
+  #     #   CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_D1_DATABASE_ID / CLOUDFLARE_API_TOKEN
+  #     #   BASIC_AUTH_USER / BASIC_AUTH_PASS

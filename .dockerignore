@@ -1,0 +1,18 @@
+# Contexto de build de Docker/Podman. Mantiene la imagen y el contexto livianos.
+**/node_modules
+**/dist
+**/.turbo
+**/.rspeedy
+**/.wrangler
+.git
+.gitignore
+
+# Artefactos del host Android (pesados, no aplican al server)
+apps/mobile/native/android/.gradle
+apps/mobile/native/android/**/build
+apps/mobile/dist
+
+# Secretos locales: NO meter en la imagen (van como variables/secrets del PaaS)
+apps/server/.env
+apps/server/secrets
+apps/worker/.dev.vars

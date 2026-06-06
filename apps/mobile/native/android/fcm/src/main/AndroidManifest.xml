@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El namespace/package se define en build.gradle.kts (namespace = "com.yapi.fcm"). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

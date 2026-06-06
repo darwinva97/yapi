@@ -1,0 +1,43 @@
+# Configuración de Fly.io para el server de push de yapi.
+#
+# Desplegar (desde la RAÍZ del monorepo, para que el contexto incluya el
+# pnpm-workspace):
+#   fly launch --no-deploy --copy-config --config apps/server/fly.toml --dockerfile apps/server/Dockerfile
+#   fly secrets set --config apps/server/fly.toml \
+#       BASIC_AUTH_USER=admin BASIC_AUTH_PASS=... \
+#       CLOUDFLARE_ACCOUNT_ID=39f3db3a2ce79188fddf0cb83e72f8be \
+#       CLOUDFLARE_D1_DATABASE_ID=b7938c9e-57fb-4ad3-b64e-b90a87aa7c70 \
+#       CLOUDFLARE_API_TOKEN=... \
+#       FIREBASE_SERVICE_ACCOUNT="$(cat apps/server/secrets/serviceAccountKey.json | tr -d '\n')"
+#   fly deploy --config apps/server/fly.toml --dockerfile apps/server/Dockerfile
+
+app = "yapi-push"
+primary_region = "gru" # São Paulo (única región de Sudamérica en Fly); cámbialo si quieres
+
+[build]
+  dockerfile = "apps/server/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3001"
+  # NODE_ENV=production activa el driver d1-http; las credenciales van como secrets.
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  # Always-on: el push sale al instante (sin cold start). Pon auto_stop_machines
+  # = "stop" y min_machines_running = 0 si prefieres ahorrar y toleras el arranque.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

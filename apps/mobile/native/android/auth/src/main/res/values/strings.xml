@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Rellena estos valores con tus credenciales antes de compilar el host app.
+
+    - google_server_client_id: el **Web client id** de OAuth 2.0 (Google Cloud
+      Console → Credenciales). DEBE coincidir con `GOOGLE_CLIENT_ID` del worker,
+      porque el worker valida que el `aud` del ID token sea ese client id.
+    - facebook_app_id / facebook_client_token: de tu app en
+      developers.facebook.com (Configuración → Básica).
+    - fb_login_protocol_scheme: literalmente "fb" + el facebook_app_id.
+
+    Son placeholders: cámbialos en Android Studio (no se pueden probar aquí).
+-->
+<resources>
+    <string name="google_server_client_id">TU_WEB_CLIENT_ID.apps.googleusercontent.com</string>
+    <string name="facebook_app_id">000000000000000</string>
+    <string name="facebook_client_token">00000000000000000000000000000000</string>
+    <string name="fb_login_protocol_scheme">fb000000000000000</string>
+</resources>

@@ -1,0 +1,10 @@
+{
+  "extends": "@yapi/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lynx-js/react",
+    "types": ["@lynx-js/types"]
+  },
+  "include": ["src", "lynx-env.d.ts", "lynx.config.ts"]
+}

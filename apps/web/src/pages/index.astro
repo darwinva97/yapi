@@ -1,0 +1,41 @@
+---
+import type { HealthResponse } from "@yapi/types";
+
+const apiBase = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3001";
+
+let health: HealthResponse | null = null;
+try {
+  const res = await fetch(`${apiBase}/health`);
+  if (res.ok) health = (await res.json()) as HealthResponse;
+} catch {
+  health = null;
+}
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yapi · web</title>
+  </head>
+  <body>
+    <main>
+      <h1>yapi</h1>
+      <p>Frontend en Astro del monorepo <code>yapi</code>.</p>
+      <section>
+        <h2>Estado de la API</h2>
+        {
+          health ? (
+            <p>
+              ✅ <strong>{health.service}</strong> — {health.status} (
+              {health.timestamp})
+            </p>
+          ) : (
+            <p>⚠️ No se pudo contactar con la API en {apiBase}</p>
+          )
+        }
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+# Variables locales para `wrangler dev` (copiar a .dev.vars)
+
+# Opcional: para que el worker dispare push al publicar una notificación con
+# `push: true`, apúntalo al server de push (apps/server) y su Basic Auth.
+# PUSH_SERVER_URL="http://127.0.0.1:3001"
+# PUSH_SERVER_AUTH="Basic YWRtaW46Y2hhbmdlbWU="
+
+# --- Autenticación (Google / Facebook / Celular) ---
+
+# Modo desarrollo: acepta credenciales mock de Google/Facebook
+# (`mock:<email>:<nombre>`) y devuelve el código OTP del celular en la respuesta.
+# Úsalo SOLO en local / pruebas E2E. En producción déjalo sin definir.
+AUTH_DEV_MOCK="1"
+
+# Producción Google: valida que el ID token sea para tu app (aud == client id).
+# GOOGLE_CLIENT_ID="xxxxx.apps.googleusercontent.com"
+# Producción Facebook (informativo): FACEBOOK_APP_ID="..."
+
+# Producción Celular: Twilio para enviar el SMS con el código OTP.
+# TWILIO_ACCOUNT_SID="ACxxxxx"
+# TWILIO_AUTH_TOKEN="xxxxx"
+# TWILIO_FROM="+1xxxxxxxxxx"

@@ -1,0 +1,50 @@
+name: Deploy worker
+
+# Despliega el worker de Cloudflare en cada push a main (y manualmente).
+# Requiere dos secretos del repo (Settings → Secrets and variables → Actions):
+#   - CLOUDFLARE_API_TOKEN  → token con permisos Account: Workers Scripts (Edit) + D1 (Edit)
+#   - CLOUDFLARE_ACCOUNT_ID → 39f3db3a2ce79188fddf0cb83e72f8be
+#
+# El secreto FIREBASE_SERVICE_ACCOUNT del worker NO se gestiona aquí: persiste
+# entre despliegues (se subió una vez con `wrangler secret put`).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm check-types
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Apply D1 migrations (remote, idempotente)
+        working-directory: apps/worker
+        run: pnpm exec wrangler d1 migrations apply yapi --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy worker
+        working-directory: apps/worker
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

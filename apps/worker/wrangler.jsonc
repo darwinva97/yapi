@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yapi-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "yapi",
+      "database_id": "b7938c9e-57fb-4ad3-b64e-b90a87aa7c70",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ]
+}

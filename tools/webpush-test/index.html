@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yapi · web push test</title>
+    <style>
+      body { font-family: system-ui, sans-serif; background: #0b0b0f; color: #eee; padding: 24px; }
+      h1 { color: #16a34a; }
+      pre { white-space: pre-wrap; word-break: break-all; background: #16181d; padding: 12px; border-radius: 8px; }
+      .ok { color: #16a34a; } .err { color: #ef4444; }
+    </style>
+  </head>
+  <body>
+    <h1>yapi · web push test</h1>
+    <p>Estado: <span id="status">inicializando…</span></p>
+    <p>Token FCM:</p>
+    <pre id="token">—</pre>
+    <p>Mensaje recibido:</p>
+    <pre id="msg">—</pre>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+    <script src="/firebase-config.js"></script>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      (async () => {
+        try {
+          firebase.initializeApp(FIREBASE_CONFIG);
+          const messaging = firebase.messaging();
+
+          const perm = await Notification.requestPermission();
+          $("status").textContent = "permiso: " + perm;
+          if (perm !== "granted") throw new Error("permiso de notificaciones denegado");
+
+          const reg = await navigator.serviceWorker.register(
+            "/firebase-messaging-sw.js",
+          );
+          await navigator.serviceWorker.ready;
+
+          const token = await messaging.getToken({
+            vapidKey: VAPID_KEY,
+            serviceWorkerRegistration: reg,
+          });
+          window.__TOKEN__ = token;
+          $("token").textContent = token;
+          $("status").innerHTML = '<span class="ok">listo (token obtenido)</span>';
+          console.log("FCM_TOKEN_READY");
+
+          // Mensajes en primer plano.
+          messaging.onMessage((payload) => {
+            window.__MSG__ = payload;
+            $("msg").textContent = JSON.stringify(payload, null, 2);
+            console.log("FCM_MESSAGE_RECEIVED");
+            const n = payload.notification || {};
+            try {
+              reg.showNotification(n.title || "yapi", { body: n.body || "" });
+            } catch (e) {}
+          });
+        } catch (e) {
+          window.__ERR__ = String(e && e.message ? e.message : e);
+          $("status").innerHTML = '<span class="err">error: ' + window.__ERR__ + "</span>";
+          console.log("FCM_ERROR:" + window.__ERR__);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1 @@
+ALTER TABLE `channel_subscribers` ADD `status` text DEFAULT 'accepted' NOT NULL;

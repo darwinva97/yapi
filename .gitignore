@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+build
+.astro
+.output
+.wrangler
+
+# Local SQLite (desarrollo)
+.data
+*.db
+*.sqlite
+*.sqlite3
+
+# Secretos (claves de service account de Firebase, etc.)
+secrets
+serviceAccountKey*.json
+
+# Android
+local.properties
+.gradle
+apps/mobile/native/android/**/build
+
+# Turbo
+.turbo
+
+# Env
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editors
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json

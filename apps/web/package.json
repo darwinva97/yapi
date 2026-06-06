@@ -1,0 +1,22 @@
+{
+  "name": "@yapi/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check-types": "astro check",
+    "clean": "rm -rf dist .astro"
+  },
+  "dependencies": {
+    "@yapi/types": "workspace:*",
+    "astro": "^6.4.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@yapi/tsconfig": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}
