@@ -27,3 +27,7 @@ export const SERVER_URL =
 // Basic Auth del server de push (demo). En producción el push lo dispara el
 // worker/servidor, no el cliente. base64("admin:changeme")
 export const BASIC_AUTH_HEADER = "Basic YWRtaW46Y2hhbmdlbWU=";
+
+// Web API key de Firebase (NO es secreto: se distribuye en el cliente). El móvil
+// inicia sesión contra Firebase Auth (correo/Google) y manda el ID token al worker.
+export const FIREBASE_API_KEY = "AIzaSyCg-_K1jv9z37-8TbiDbR8K4xcABmDJ-Vc";
