@@ -27,6 +27,30 @@ android {
         jvmTarget = "17"
     }
 
+    // Firma de release: con un keystore FIJO (mismo SHA-1 siempre) para que el
+    // login con Google funcione. El keystore y sus claves llegan por entorno
+    // (en CI desde secretos). Sin keystore, release se firma con la clave debug
+    // (para builds locales rápidos).
+    val keystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig =
+                if (keystorePath != null) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
+        }
+    }
+
     packaging {
         resources {
             pickFirsts += listOf("**/libc++_shared.so")

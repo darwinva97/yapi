@@ -54,21 +54,29 @@ jobs:
       - name: Copiar bundle a los assets del host Android
         run: cp apps/mobile/dist/main.lynx.bundle apps/mobile/native/android/app/src/main/assets/main.lynx.bundle
 
-      - name: Build APK (debug)
+      - name: Restaurar keystore de firma (estable, para que Google funcione)
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/yapi-release.keystore"
+
+      - name: Build APK (release, firmado)
         working-directory: apps/mobile/native/android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/yapi-release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Subir APK como artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yapi-debug-apk
-          path: apps/mobile/native/android/app/build/outputs/apk/debug/app-debug.apk
+          name: yapi-release-apk
+          path: apps/mobile/native/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Adjuntar APK a la Release (solo en tags)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/mobile/native/android/app/build/outputs/apk/debug/app-debug.apk
+          files: apps/mobile/native/android/app/build/outputs/apk/release/app-release.apk

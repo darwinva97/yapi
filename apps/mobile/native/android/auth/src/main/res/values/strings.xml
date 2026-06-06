@@ -1,18 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Rellena estos valores con tus credenciales antes de compilar el host app.
-
-    - google_server_client_id: el **Web client id** de OAuth 2.0 (Google Cloud
-      Console → Credenciales). DEBE coincidir con `GOOGLE_CLIENT_ID` del worker,
-      porque el worker valida que el `aud` del ID token sea ese client id.
-    - facebook_app_id / facebook_client_token: de tu app en
-      developers.facebook.com (Configuración → Básica).
-    - fb_login_protocol_scheme: literalmente "fb" + el facebook_app_id.
-
-    Son placeholders: cámbialos en Android Studio (no se pueden probar aquí).
+    - google_server_client_id: el **Web client ID** de OAuth del proyecto Firebase
+      yapi-46b53. Es con lo que Credential Manager pide el ID token de Google
+      (su `aud`). NO se usa el "secreto de cliente web".
+    - facebook_*: Facebook quedó descartado; placeholders solo para que el
+      manifest del módulo `auth` (que aún los referencia) compile.
 -->
 <resources>
-    <string name="google_server_client_id">TU_WEB_CLIENT_ID.apps.googleusercontent.com</string>
+    <string name="google_server_client_id">174017374070-gj8dk7k7g49opnmeihdevp015ra3ksiu.apps.googleusercontent.com</string>
     <string name="facebook_app_id">000000000000000</string>
     <string name="facebook_client_token">00000000000000000000000000000000</string>
     <string name="fb_login_protocol_scheme">fb000000000000000</string>
