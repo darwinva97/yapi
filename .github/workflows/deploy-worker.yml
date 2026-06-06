@@ -23,14 +23,15 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Type-check
-        run: pnpm check-types
+      # Solo el worker y sus deps del workspace (no web/mobile).
+      - name: Type-check (worker)
+        run: pnpm --filter @yapi/worker... check-types
 
       - name: Unit tests
         run: pnpm test
