@@ -12,7 +12,20 @@
           "package_name": "com.yapi.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "174017374070-1qcsctdqpkgk17c148654inbnseqjs0c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yapi.app",
+            "certificate_hash": "052d37a19843135458101f82a86d092f323799a5"
+          }
+        },
+        {
+          "client_id": "174017374070-gj8dk7k7g49opnmeihdevp015ra3ksiu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCg-_K1jv9z37-8TbiDbR8K4xcABmDJ-Vc"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "174017374070-gj8dk7k7g49opnmeihdevp015ra3ksiu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
