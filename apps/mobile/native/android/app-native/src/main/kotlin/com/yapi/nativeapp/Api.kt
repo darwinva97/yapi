@@ -3,6 +3,11 @@ package com.yapi.nativeapp
 import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonArray
 import okhttp3.Request
 
 /** Cliente de la API de dominio (worker Cloudflare), autenticado con el ID token. */
@@ -59,6 +64,15 @@ object Api {
         authed(context, "POST", "/channels/$channelId/decline", "{}")
     }
 
+    /** Schedule como JsonObject con SIEMPRE las 3 claves (el worker exige días/start/end presentes). */
+    fun scheduleJson(days: List<Int>?, start: String?, end: String?): JsonObject = JsonObject(
+        mapOf(
+            "days" to (days?.let { JsonArray(it.map { d -> JsonPrimitive(d) }) } ?: JsonNull),
+            "start" to (start?.let { JsonPrimitive(it) } ?: JsonNull),
+            "end" to (end?.let { JsonPrimitive(it) } ?: JsonNull),
+        ),
+    )
+
     @Serializable
     data class CreateChannelReq(
         val name: String,
@@ -67,6 +81,7 @@ object Api {
         val subscriberIds: List<String> = emptyList(),
         val deviceIds: List<String> = emptyList(),
         val appIds: List<String> = emptyList(),
+        val schedule: JsonElement? = null,
     )
 
     suspend fun createChannel(context: Context, req: CreateChannelReq): Channel =
@@ -84,6 +99,7 @@ object Api {
         val subscriberIds: List<String>? = null,
         val deviceIds: List<String>? = null,
         val appIds: List<String>? = null,
+        val schedule: JsonElement? = null,
     )
 
     suspend fun updateChannel(context: Context, req: UpdateChannelReq): Channel =
@@ -95,6 +111,23 @@ object Api {
     suspend fun deleteChannel(context: Context, id: String) {
         authed(context, "DELETE", "/channels/$id")
     }
+
+    @Serializable
+    data class CreateNotificationReq(
+        val id: String,
+        val title: String,
+        val description: String = "",
+        val sourceApp: String = "yapi",
+    )
+
+    suspend fun createNotification(context: Context, req: CreateNotificationReq): ChannelNotification =
+        json.decodeFromString(
+            ChannelNotification.serializer(),
+            authed(
+                context, "POST", "/channels/${req.id}/notifications",
+                json.encodeToString(CreateNotificationReq.serializer(), req),
+            ),
+        )
 
     suspend fun listDevices(context: Context): List<Device> =
         json.decodeFromString(ListSerializer(Device.serializer()), authed(context, "GET", "/devices"))
