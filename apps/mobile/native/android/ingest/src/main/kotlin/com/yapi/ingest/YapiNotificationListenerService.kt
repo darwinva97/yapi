@@ -40,11 +40,16 @@ class YapiNotificationListenerService : NotificationListenerService() {
         if (pkg == packageName) return // ignora las propias
 
         val allowed = Prefs.allowedPackages(this)
+        Log.i(TAG, "notif de $pkg | permitidas=$allowed")
         if (!allowed.contains(pkg)) return // solo apps permitidas
 
-        val token = Prefs.read(this, Prefs.TOKEN) ?: return
-        val workerUrl = Prefs.read(this, Prefs.WORKER_URL) ?: return
-        val deviceId = Prefs.read(this, Prefs.DEVICE_ID) ?: return
+        val token = Prefs.read(this, Prefs.TOKEN)
+        val workerUrl = Prefs.read(this, Prefs.WORKER_URL)
+        val deviceId = Prefs.read(this, Prefs.DEVICE_ID)
+        if (token == null || workerUrl == null || deviceId == null) {
+            Log.w(TAG, "sin sesión (token/url/deviceId) — no se reenvía $pkg")
+            return
+        }
 
         val extras = sbn.notification?.extras ?: return
         val title = extras.getString(Notification.EXTRA_TITLE)?.trim().orEmpty()
@@ -64,12 +69,14 @@ class YapiNotificationListenerService : NotificationListenerService() {
             .post(body.toRequestBody(JSON))
             .build()
 
+        Log.i(TAG, "reenviando $pkg -> $workerUrl/ingest")
         http.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 Log.w(TAG, "ingest POST falló", e)
             }
 
             override fun onResponse(call: Call, response: Response) {
+                Log.i(TAG, "ingest resp ${response.code} para $pkg")
                 response.close()
             }
         })

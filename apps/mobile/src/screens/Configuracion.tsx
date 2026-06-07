@@ -14,6 +14,7 @@ import {
   hasNativeIngest,
   hasNotificationAccess,
   openNotificationAccess,
+  setIngestSession,
 } from "../notifListener.js";
 import { colors } from "../theme.js";
 
@@ -473,6 +474,11 @@ function DeviceCard({
       );
       const updated = await api.call("updateDevice", { id: device.id, apps });
       onUpdated(updated);
+      // Avísale al lector nativo las apps a escuchar (sin esperar a re-abrir).
+      setIngestSession(
+        updated.id,
+        updated.apps.map((a) => a.package),
+      );
       setAppsOpen(false);
     } catch (e) {
       onError(describeError(e, "No se pudieron guardar las apps"));
