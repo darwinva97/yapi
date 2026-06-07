@@ -72,6 +72,39 @@ object FirebaseAuth {
     suspend fun signIn(email: String, password: String) =
         identity("signInWithPassword", email, password)
 
+    @Serializable
+    private data class IdpReq(
+        val postBody: String,
+        val requestUri: String = "http://localhost",
+        val returnIdpCredential: Boolean = true,
+        val returnSecureToken: Boolean = true,
+    )
+
+    /** Intercambia el ID token de Google por una sesión de Firebase. */
+    suspend fun signInWithGoogle(googleIdToken: String): FbSession {
+        val req = Request.Builder()
+            .url("$IDENTITY:signInWithIdp?key=${Config.FIREBASE_API_KEY}")
+            .post(
+                jsonBody(
+                    json.encodeToString(
+                        IdpReq.serializer(),
+                        IdpReq(postBody = "id_token=$googleIdToken&providerId=google.com"),
+                    ),
+                ),
+            )
+            .build()
+        val text = Net.call(req)
+        val r = json.decodeFromString<IdentityResp>(text)
+        if (r.idToken == null || r.refreshToken == null) {
+            throw ApiException(describe(r.error?.message), 401)
+        }
+        return FbSession(
+            r.idToken,
+            r.refreshToken,
+            System.currentTimeMillis() + (r.expiresIn?.toLongOrNull() ?: 3600) * 1000,
+        )
+    }
+
     suspend fun refresh(refreshToken: String): FbSession {
         val form = FormBody.Builder()
             .add("grant_type", "refresh_token")

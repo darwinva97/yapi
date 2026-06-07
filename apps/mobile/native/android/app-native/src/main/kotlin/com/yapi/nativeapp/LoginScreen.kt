@@ -47,6 +47,23 @@ fun LoginScreen(onLoggedIn: (User) -> Unit) {
     var confirm by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var googleLoading by remember { mutableStateOf(false) }
+
+    fun googleSignIn() {
+        if (googleLoading) return
+        error = null
+        googleLoading = true
+        scope.launch {
+            try {
+                onLoggedIn(GoogleAuth.signIn(context))
+            } catch (e: Exception) {
+                android.util.Log.w("YapiNative", "google error: ${e.message}", e)
+                error = e.message ?: "No se pudo entrar con Google"
+            } finally {
+                googleLoading = false
+            }
+        }
+    }
 
     fun submit() {
         if (loading) return
@@ -111,6 +128,21 @@ fun LoginScreen(onLoggedIn: (User) -> Unit) {
         ) {
             if (loading) CircularProgressIndicator(color = Yapi.text, modifier = Modifier.size(22.dp))
             else Text(if (register) "Crear cuenta" else "Entrar", color = Yapi.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("o", color = Yapi.textFaint, fontSize = 13.sp)
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = { googleSignIn() },
+            enabled = !googleLoading,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Yapi.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Yapi.border),
+        ) {
+            if (googleLoading) CircularProgressIndicator(color = Yapi.text, modifier = Modifier.size(22.dp))
+            else Text("Continuar con Google", color = Yapi.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(12.dp))
