@@ -26,6 +26,20 @@ private enum class Tab(val label: String) { Canales("Canales"), Novedades("Noved
 @Composable
 fun HomeScreen(user: User, onLogout: () -> Unit) {
     var tab by remember { mutableStateOf(Tab.Canales) }
+    var editorOpen by remember { mutableStateOf(false) }
+    var editChannel by remember { mutableStateOf<Channel?>(null) }
+    var channelsReload by remember { mutableStateOf(0) }
+
+    if (editorOpen) {
+        ChannelEditorScreen(
+            channel = editChannel,
+            onClose = { changed ->
+                editorOpen = false
+                if (changed) channelsReload++
+            },
+        )
+        return
+    }
 
     Scaffold(
         containerColor = Yapi.bg,
@@ -60,7 +74,11 @@ fun HomeScreen(user: User, onLogout: () -> Unit) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                Tab.Canales -> ChannelsScreen()
+                Tab.Canales -> ChannelsScreen(
+                    reloadKey = channelsReload,
+                    onCreate = { editChannel = null; editorOpen = true },
+                    onEdit = { editChannel = it; editorOpen = true },
+                )
                 Tab.Novedades -> ActivityScreen()
                 Tab.Config -> ConfigScreen(user = user, onLogout = onLogout)
             }

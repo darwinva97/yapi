@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,13 +32,13 @@ import androidx.compose.ui.unit.sp
 private enum class Filter(val label: String) { Todos("Todos"), Propios("Propios"), Otros("Otros") }
 
 @Composable
-fun ChannelsScreen() {
+fun ChannelsScreen(reloadKey: Int, onCreate: () -> Unit, onEdit: (Channel) -> Unit) {
     val context = LocalContext.current
     var channels by remember { mutableStateOf<List<Channel>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var filter by remember { mutableStateOf(Filter.Todos) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
         try { channels = Api.listChannels(context) } catch (e: Exception) { error = e.message }
     }
 
@@ -51,7 +52,14 @@ fun ChannelsScreen() {
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(20.dp))
-        Text("Canales", color = Yapi.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Canales", color = Yapi.text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            androidx.compose.foundation.layout.Box(
+                Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Yapi.primary).clickable { onCreate() },
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) { Text("+", color = Yapi.text, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+        }
 
         Spacer(Modifier.height(16.dp))
         Row(
@@ -87,7 +95,9 @@ fun ChannelsScreen() {
                     Text("No hay canales en esta vista.", color = Yapi.textFaint, fontSize = 14.sp)
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(visible, key = { it.id }) { ChannelCard(it) }
+                        items(visible, key = { it.id }) { ch ->
+                            ChannelCard(ch) { if (ch.isOwner) onEdit(ch) }
+                        }
                     }
                 }
             }
@@ -96,11 +106,15 @@ fun ChannelsScreen() {
 }
 
 @Composable
-private fun ChannelCard(channel: Channel) {
+private fun ChannelCard(channel: Channel, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Yapi.surface).padding(16.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Yapi.surface)
+            .clickable { onClick() }.padding(16.dp),
     ) {
-        Text(channel.name, color = Yapi.text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(channel.name, color = Yapi.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (channel.isOwner) Text("editar ›", color = Yapi.textMuted, fontSize = 12.sp)
+        }
         if (channel.description.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
             Text(channel.description, color = Yapi.textSecondary, fontSize = 13.sp)

@@ -75,6 +75,27 @@ object Api {
             authed(context, "POST", "/channels", json.encodeToString(CreateChannelReq.serializer(), req)),
         )
 
+    @Serializable
+    data class UpdateChannelReq(
+        val id: String,
+        val name: String? = null,
+        val description: String? = null,
+        val enabled: Boolean? = null,
+        val subscriberIds: List<String>? = null,
+        val deviceIds: List<String>? = null,
+        val appIds: List<String>? = null,
+    )
+
+    suspend fun updateChannel(context: Context, req: UpdateChannelReq): Channel =
+        json.decodeFromString(
+            Channel.serializer(),
+            authed(context, "PUT", "/channels/${req.id}", json.encodeToString(UpdateChannelReq.serializer(), req)),
+        )
+
+    suspend fun deleteChannel(context: Context, id: String) {
+        authed(context, "DELETE", "/channels/$id")
+    }
+
     suspend fun listDevices(context: Context): List<Device> =
         json.decodeFromString(ListSerializer(Device.serializer()), authed(context, "GET", "/devices"))
 
