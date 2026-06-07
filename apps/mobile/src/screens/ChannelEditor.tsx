@@ -272,7 +272,9 @@ export function ChannelEditor({
               value={on ? "seleccionado" : undefined}
               onTap={() => setSection(s.key)}
               style={{
-                flex: 1,
+                // Ancho explícito (1/N) — `flex: 1` colapsa en Lynx nativo.
+                width: `${(100 / sections.length).toFixed(3)}%`,
+                flexGrow: 1,
                 alignItems: "center",
                 paddingTop: "12px",
                 paddingBottom: "12px",

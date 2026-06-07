@@ -92,7 +92,10 @@ function SubTabButton({
       value={active ? "seleccionado" : undefined}
       onTap={onTap}
       style={{
-        flex: 1,
+        // `flex: 1` colapsa en Lynx nativo; mitad y mitad explícito.
+        width: "50%",
+        flexGrow: 1,
+        flexBasis: "50%",
         alignItems: "center",
         paddingTop: "10px",
         paddingBottom: "10px",

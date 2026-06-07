@@ -68,6 +68,7 @@ export function ConfirmDialog({
           style={{
             display: "flex",
             flexDirection: "row",
+            justifyContent: "space-between",
             marginTop: "20px",
           }}
         >
@@ -75,13 +76,14 @@ export function ConfirmDialog({
             label="Cancelar"
             onTap={onCancel}
             style={{
-              flex: 1,
+              width: "48%",
+              flexGrow: 1,
+              flexBasis: "48%",
               backgroundColor: colors.surfaceMuted,
               borderRadius: "10px",
               paddingTop: "12px",
               paddingBottom: "12px",
               alignItems: "center",
-              marginRight: "8px",
             }}
           >
             <text
@@ -95,13 +97,14 @@ export function ConfirmDialog({
             label={confirmLabel}
             onTap={onConfirm}
             style={{
-              flex: 1,
+              width: "48%",
+              flexGrow: 1,
+              flexBasis: "48%",
               backgroundColor: colors.primary,
               borderRadius: "10px",
               paddingTop: "12px",
               paddingBottom: "12px",
               alignItems: "center",
-              marginLeft: "8px",
             }}
           >
             <text

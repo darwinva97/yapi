@@ -52,19 +52,27 @@ function InvitationCard({
       <text style={{ color: colors.textMuted, fontSize: "13px", marginTop: "4px" }}>
         {item.description}
       </text>
-      <view style={{ display: "flex", flexDirection: "row", marginTop: "14px" }}>
+      <view
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: "14px",
+        }}
+      >
         <Pressable
           label={`Aceptar invitación a ${item.channelName}`}
           onTap={onAccept}
           disabled={busy}
           style={{
-            flex: 1,
+            width: "48%",
+            flexGrow: 1,
+            flexBasis: "48%",
             backgroundColor: colors.primary,
             borderRadius: "10px",
             paddingTop: "11px",
             paddingBottom: "11px",
             alignItems: "center",
-            marginRight: "8px",
           }}
         >
           <text accessibility-elements-hidden={true} style={{ color: colors.text, fontSize: "14px", fontWeight: "bold" }}>
@@ -76,7 +84,9 @@ function InvitationCard({
           onTap={onDecline}
           disabled={busy}
           style={{
-            flex: 1,
+            width: "48%",
+            flexGrow: 1,
+            flexBasis: "48%",
             backgroundColor: colors.surfaceMuted,
             borderRadius: "10px",
             paddingTop: "11px",
