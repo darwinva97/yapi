@@ -246,7 +246,8 @@ export function ChannelEditor({
             fontSize: "20px",
             fontWeight: "bold",
             marginLeft: "8px",
-            flex: 1,
+            flexGrow: 1,
+            flexBasis: "auto",
           }}
         >
           {headerTitle}
