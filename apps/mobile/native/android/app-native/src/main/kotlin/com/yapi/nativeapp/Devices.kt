@@ -1,6 +1,8 @@
 package com.yapi.nativeapp
 
 import android.content.Context
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.tasks.await
 
 /**
  * Registro del dispositivo de este teléfono y sincronización de la sesión del
@@ -11,11 +13,12 @@ object Devices {
     // Debe estar en el enum Platform del contrato (ios|android|web|lynx|unknown).
     private const val PLATFORM = "android"
 
-    /** Registra (idempotente: el worker deduplica por nombre+plataforma) y sincroniza el lector. */
+    /** Registra (upsert por token FCM) y sincroniza el lector. */
     suspend fun ensureRegistered(context: Context): Device {
+        val fcmToken = runCatching { FirebaseMessaging.getInstance().token.await() }.getOrNull()
         val device = Api.registerDevice(
             context,
-            Api.RegisterDeviceReq(name = DEVICE_NAME, platform = PLATFORM),
+            Api.RegisterDeviceReq(name = DEVICE_NAME, platform = PLATFORM, token = fcmToken),
         )
         syncListener(context, device)
         return device

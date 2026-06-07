@@ -136,6 +136,7 @@ object Api {
     data class RegisterDeviceReq(
         val name: String? = null,
         val platform: String? = null,
+        val token: String? = null,
         val apps: List<AppRef>? = null,
     )
 
