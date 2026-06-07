@@ -20,11 +20,16 @@ export function Modal({
     <view
       bindtap={onClose}
       style={{
-        position: "absolute",
-        top: "0px",
+        // `fixed`: cubre TODA la pantalla (ignora ancestros `relative` y su
+        // recorte), por eso el overlay gris tapa todo y la hoja no queda chica.
+        position: "fixed",
         left: "0px",
+        top: "0px",
         right: "0px",
         bottom: "0px",
+        width: "100vw",
+        height: "100vh",
+        zIndex: 1000,
         backgroundColor: "rgba(0,0,0,0.6)",
         display: "flex",
         flexDirection: "column",
@@ -37,7 +42,8 @@ export function Modal({
         style={{
           display: "flex",
           flexDirection: "column",
-          maxHeight: "90vh",
+          // Alto definido de la hoja (ya sin recorte por el overlay fixed).
+          height: "72vh",
           backgroundColor: colors.bg,
           borderTopLeftRadius: "20px",
           borderTopRightRadius: "20px",
@@ -86,18 +92,15 @@ export function Modal({
           </Pressable>
         </view>
 
-        {/* Contenido. En Lynx nativo el scroll-view no respeta bien `height`/
-            `flex:1`; el alto va en un <view> contenedor (sí respeta vh, como el
-            root 100vh) y el scroll lo llena al 100%. */}
-        <view style={{ height: "55vh" }}>
-          <scroll-view
-            scroll-orientation="vertical"
-            style={{ height: "100%", paddingLeft: "20px", paddingRight: "20px" }}
-          >
-            {children as never}
-            <view style={{ height: "12px" }} />
-          </scroll-view>
-        </view>
+        {/* Contenido: llena el espacio entre cabecera y pie (la hoja tiene alto
+            definido, así que flex:1 funciona). */}
+        <scroll-view
+          scroll-orientation="vertical"
+          style={{ flex: 1, paddingLeft: "20px", paddingRight: "20px" }}
+        >
+          {children as never}
+          <view style={{ height: "12px" }} />
+        </scroll-view>
 
         {/* Pie opcional */}
         {footer ? (
