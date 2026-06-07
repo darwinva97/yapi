@@ -9,6 +9,7 @@ import com.lynx.service.http.LynxHttpService;
 import com.yapi.fcm.FcmModule;
 import com.yapi.auth.SocialAuthModule;
 import com.yapi.ingest.IngestModule;
+import com.yapi.ingest.StorageModule;
 
 public class YapiApp extends Application {
     @Override
@@ -22,6 +23,8 @@ public class YapiApp extends Application {
         LynxEnv.inst().registerModule("SocialAuthModule", SocialAuthModule.class);
         // Reenviador: NativeModules.IngestModule.setSession(...) + acceso a notifs.
         LynxEnv.inst().registerModule("IngestModule", IngestModule.class);
+        // Almacenamiento persistente (sesión): NativeModules.StorageModule.*
+        LynxEnv.inst().registerModule("StorageModule", StorageModule.class);
     }
 
     private void initLynxServices() {

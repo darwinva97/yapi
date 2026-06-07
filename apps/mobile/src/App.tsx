@@ -10,13 +10,31 @@ import { isOwn, type Channel } from "./data/channels.js";
 import { api } from "./api.js";
 import { getFcmToken } from "./fcm.js";
 import { setIngestSession } from "./notifListener.js";
+import { restoreSession } from "./session.js";
 import { colors } from "./theme.js";
 
 export function App() {
   const [logged, setLogged] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [tab, setTab] = useState<Tab>("canales");
   const [creatingChannel, setCreatingChannel] = useState(false);
   const [openChannel, setOpenChannel] = useState<Channel | null>(null);
+
+  // Al arrancar, restaura la sesión persistida (refresh token de Firebase) para
+  // no obligar a re-logear en cada apertura.
+  useEffect(() => {
+    let cancelled = false;
+    restoreSession()
+      .then((user) => {
+        if (!cancelled && user) setLogged(true);
+      })
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Al iniciar sesión registramos este dispositivo en silencio (con su token de
   // push si lo hay), SIN tocar sus apps. Qué apps pueden leer notificaciones se
@@ -44,6 +62,37 @@ export function App() {
         /* el registro es best-effort; no bloquea el uso de la app */
       });
   }, [logged]);
+
+  // Mientras se restaura la sesión persistida, muestra un splash (evita el
+  // parpadeo del login si el usuario ya estaba autenticado).
+  if (restoring) {
+    return (
+      <view
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.bg,
+        }}
+      >
+        <view
+          style={{
+            width: "76px",
+            height: "76px",
+            borderRadius: "76px",
+            backgroundColor: colors.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <text style={{ color: colors.text, fontSize: "40px", fontWeight: "bold" }}>
+            y
+          </text>
+        </view>
+      </view>
+    );
+  }
 
   if (!logged) {
     return <Login onLogin={() => setLogged(true)} />;
