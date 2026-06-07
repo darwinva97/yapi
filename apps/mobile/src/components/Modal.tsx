@@ -37,10 +37,7 @@ export function Modal({
         style={{
           display: "flex",
           flexDirection: "column",
-          // Alto DEFINIDO (no solo maxHeight): así el scroll-view interior puede
-          // usar flex:1 y ocupar bien el espacio (en Lynx nativo un flex:1 sin
-          // alto definido del padre colapsa).
-          height: "78vh",
+          maxHeight: "90vh",
           backgroundColor: colors.bg,
           borderTopLeftRadius: "20px",
           borderTopRightRadius: "20px",
@@ -89,10 +86,12 @@ export function Modal({
           </Pressable>
         </view>
 
-        {/* Contenido: flex:1 para llenar el alto (definido) de la tarjeta. */}
+        {/* Contenido. En Lynx nativo el scroll-view NO respeta flex:1 (se
+            colapsa); necesita un alto explícito. 55vh da una lista amplia y
+            desplazable. */}
         <scroll-view
           scroll-orientation="vertical"
-          style={{ flex: 1, paddingLeft: "20px", paddingRight: "20px" }}
+          style={{ height: "55vh", paddingLeft: "20px", paddingRight: "20px" }}
         >
           {children as never}
           <view style={{ height: "12px" }} />
