@@ -467,7 +467,7 @@ function ReadOnlyBanner({ publisher }: { publisher?: string }) {
       <text accessibility-elements-hidden={true} style={{ fontSize: "16px", marginRight: "10px" }}>
         👁
       </text>
-      <text style={{ color: colors.textMuted, fontSize: "13px", flex: 1, lineHeight: "18px" }}>
+      <text style={{ color: colors.textMuted, fontSize: "13px", flexGrow: 1, flexBasis: "auto", lineHeight: "18px" }}>
         Solo lectura. Este canal lo gestiona{" "}
         <text style={{ color: colors.text, fontWeight: "bold" }}>
           {publisher ?? "otro usuario"}
@@ -827,7 +827,7 @@ function DeviceSelect({
                 }}
               >
                 <Checkbox on={on} shape="square" />
-                <view style={{ marginLeft: "12px", flex: 1 }}>
+                <view style={{ marginLeft: "12px", flexGrow: 1, flexBasis: "auto" }}>
                   <text style={{ color: colors.text, fontSize: "15px" }}>{d.name}</text>
                   <text style={{ color: colors.textFaint, fontSize: "12px", marginTop: "2px" }}>
                     {d.notifier ? "Notificador activado" : "Notificador desactivado"}
@@ -936,7 +936,7 @@ function UsersSection({
         const rowContent = (
           <>
             <Avatar name={u.name} color={u.color} size={36} />
-            <view style={{ marginLeft: "12px", flex: 1 }}>
+            <view style={{ marginLeft: "12px", flexGrow: 1, flexBasis: "auto" }}>
               <view style={{ display: "flex", flexDirection: "row", alignItems: "center" }}>
                 <text style={{ color: colors.text, fontSize: "15px" }}>{u.name}</text>
                 {pending ? (
@@ -1186,7 +1186,8 @@ function NotificationsSection({
                 color: colors.text,
                 fontSize: "15px",
                 fontWeight: "bold",
-                flex: 1,
+                flexGrow: 1,
+                flexBasis: "auto",
               }}
             >
               {n.title}

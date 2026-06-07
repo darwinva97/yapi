@@ -98,7 +98,7 @@ export function AppMultiSelect({
             >
               <text style={{ color: colors.text, fontSize: "13px" }}>{on ? "✓" : ""}</text>
             </view>
-            <view style={{ flex: 1 }}>
+            <view style={{ flexGrow: 1, flexBasis: "auto" }}>
               <text style={{ color: colors.text, fontSize: "15px" }}>{o.label}</text>
               {o.meta ? (
                 <text style={{ color: colors.textFaint, fontSize: "12px", marginTop: "2px" }}>

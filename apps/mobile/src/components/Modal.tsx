@@ -62,7 +62,7 @@ export function Modal({
         >
           <text
             accessibility-heading={true}
-            style={{ color: colors.text, fontSize: "18px", fontWeight: "bold", flex: 1 }}
+            style={{ color: colors.text, fontSize: "18px", fontWeight: "bold", flexGrow: 1, flexBasis: "auto" }}
           >
             {title}
           </text>

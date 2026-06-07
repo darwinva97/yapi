@@ -527,7 +527,8 @@ function DeviceCard({
           {...({ value: device.name } as Record<string, string>)}
           accessibility-label={`Nombre de ${device.name}`}
           style={{
-            flex: 1,
+            flexGrow: 1,
+            flexBasis: "auto",
             backgroundColor: colors.surfaceInput,
             borderRadius: "10px",
             height: "44px",

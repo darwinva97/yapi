@@ -129,7 +129,7 @@ export function ScheduleEditor({
             marginTop: "8px",
           }}
         >
-          <view style={{ flex: 1 }}>
+          <view style={{ flexGrow: 1, flexBasis: "45%" }}>
             <text style={{ color: colors.textMuted, fontSize: "12px", marginBottom: "6px" }}>
               Desde
             </text>
@@ -143,7 +143,7 @@ export function ScheduleEditor({
             />
           </view>
           <view style={{ width: "12px" }} />
-          <view style={{ flex: 1 }}>
+          <view style={{ flexGrow: 1, flexBasis: "45%" }}>
             <text style={{ color: colors.textMuted, fontSize: "12px", marginBottom: "6px" }}>
               Hasta
             </text>
