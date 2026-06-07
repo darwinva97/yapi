@@ -1,15 +1,17 @@
-name: Build APK
+name: Build APK (Lynx — archivado)
 
-# Genera el APK Android (debug, instalable) en cada tag `v*` y bajo demanda.
-# - En tags: además lo adjunta a la Release de GitHub.
-# - Siempre: lo sube como artifact descargable del run.
+# DESACTIVADO: el app Lynx quedó archivada (la app oficial es la nativa,
+# Kotlin/Compose → ver build-native-apk.yml). Este workflow ya NO se dispara
+# en tags `v*` para que solo se compile el nativo. Se deja solo el disparo
+# manual (workflow_dispatch) por si alguna vez hace falta compilar el Lynx.
 #
-# El APK debug se firma con la clave de debug (sirve para instalar/probar). Para
-# Play Store hace falta firma de release (keystore como secreto) — pendiente.
+# Genera el APK Android (debug, instalable). Para Play Store haría falta firma
+# de release (keystore como secreto) — pendiente.
 
 on:
-  push:
-    tags: ["v*"]
+  # Disparo en tags comentado: los tags `v*` ahora solo compilan el nativo.
+  # push:
+  #   tags: ["v*"]
   workflow_dispatch:
     inputs:
       worker_url:
