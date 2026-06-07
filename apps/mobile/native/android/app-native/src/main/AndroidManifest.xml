@@ -29,5 +29,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lector de notificaciones: captura notifs de las apps elegidas y las
+             reenvía al worker (/ingest). Requiere "Acceso a notificaciones". -->
+        <service
+            android:name=".YapiListenerService"
+            android:exported="false"
+            android:label="yapi (nativo)"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

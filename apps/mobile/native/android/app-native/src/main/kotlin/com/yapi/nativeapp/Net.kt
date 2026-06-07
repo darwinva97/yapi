@@ -16,6 +16,9 @@ object Net {
     val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
+        // No serializar campos null: el worker valida opcionales con .optional()
+        // (acepta ausencia, NO null) → un `apps: null` daría "Datos inválidos".
+        explicitNulls = false
     }
 
     /** Ejecuta una request en IO y devuelve el cuerpo como texto (lanza en no-2xx). */

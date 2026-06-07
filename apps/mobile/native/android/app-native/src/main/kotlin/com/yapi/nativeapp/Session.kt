@@ -48,6 +48,8 @@ object Session {
 
     fun currentUser(): User? = cache?.user
 
+    fun current(): StoredSession? = cache
+
     /** ID token válido (refresca si vence en <5 min). Null si no hay sesión. */
     suspend fun freshIdToken(context: Context): String? {
         val s = cache ?: load(context) ?: return null

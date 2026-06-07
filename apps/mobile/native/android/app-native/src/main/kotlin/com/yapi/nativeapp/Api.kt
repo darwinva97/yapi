@@ -105,6 +105,10 @@ object Api {
             authed(context, "PATCH", "/devices/${req.id}", json.encodeToString(UpdateDeviceReq.serializer(), req)),
         )
 
+    suspend fun deleteDevice(context: Context, id: String) {
+        authed(context, "DELETE", "/devices/$id")
+    }
+
     @Serializable
     data class UsersResp(val list: List<User> = emptyList())
 
