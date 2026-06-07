@@ -43,18 +43,29 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app-native:assembleRelease --no-daemon
 
-      - name: Renombrar APK
-        run: cp apps/mobile/native/android/app-native/build/outputs/apk/release/app-native-release.apk "$RUNNER_TEMP/yapi-native.apk"
+      - name: Renombrar APK con la versión
+        id: apk
+        # En tags `v*` usa la versión del tag (ej. yapi-native-v0.1.12.apk).
+        # En disparo manual usa el commit corto (ej. yapi-native-dev-1a2b3c4.apk).
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            NAME="yapi-native-${{ github.ref_name }}.apk"
+          else
+            NAME="yapi-native-dev-${GITHUB_SHA::7}.apk"
+          fi
+          cp apps/mobile/native/android/app-native/build/outputs/apk/release/app-native-release.apk "$RUNNER_TEMP/$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "path=$RUNNER_TEMP/$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Subir APK como artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yapi-native-apk
-          path: ${{ runner.temp }}/yapi-native.apk
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
 
       - name: Adjuntar APK a la Release (solo en tags)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ runner.temp }}/yapi-native.apk
+          files: ${{ steps.apk.outputs.path }}
