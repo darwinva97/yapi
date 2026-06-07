@@ -86,16 +86,18 @@ export function Modal({
           </Pressable>
         </view>
 
-        {/* Contenido. En Lynx nativo el scroll-view NO respeta flex:1 (se
-            colapsa); necesita un alto explícito. 55vh da una lista amplia y
-            desplazable. */}
-        <scroll-view
-          scroll-orientation="vertical"
-          style={{ height: "55vh", paddingLeft: "20px", paddingRight: "20px" }}
-        >
-          {children as never}
-          <view style={{ height: "12px" }} />
-        </scroll-view>
+        {/* Contenido. En Lynx nativo el scroll-view no respeta bien `height`/
+            `flex:1`; el alto va en un <view> contenedor (sí respeta vh, como el
+            root 100vh) y el scroll lo llena al 100%. */}
+        <view style={{ height: "55vh" }}>
+          <scroll-view
+            scroll-orientation="vertical"
+            style={{ height: "100%", paddingLeft: "20px", paddingRight: "20px" }}
+          >
+            {children as never}
+            <view style={{ height: "12px" }} />
+          </scroll-view>
+        </view>
 
         {/* Pie opcional */}
         {footer ? (
