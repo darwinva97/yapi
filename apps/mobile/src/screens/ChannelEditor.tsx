@@ -8,13 +8,20 @@ import { ScheduleEditor, scheduleSummary } from "../components/ScheduleEditor.js
 import type { User } from "../data/users.js";
 import type { Device } from "../data/devices.js";
 import type { Channel, ChannelNotification } from "../data/channels.js";
-import type { Schedule } from "@yapi/contract";
+import type { ChannelIntegration, Schedule } from "@yapi/contract";
 import { api, ContractError } from "../api.js";
 import { colors } from "../theme.js";
 
 type InputEvent = { detail: { value: string } };
 type Section = "info" | "users" | "integrations" | "notifications";
 type ModalKind = "apps" | "schedule" | "invite" | null;
+type IntegrationDraft = {
+  localId: string;
+  id?: string;
+  url: string;
+  enabled: boolean;
+  createdAt?: string;
+};
 
 const EMPTY_SCHEDULE: Schedule = { days: null, start: null, end: null };
 
@@ -29,6 +36,29 @@ const NOTIFICATIONS_SECTION: { key: Section; icon: string; label: string } = {
   icon: "🔔",
   label: "Notificaciones",
 };
+
+function integrationDraftFromApi(i: ChannelIntegration): IntegrationDraft {
+  return {
+    localId: i.id,
+    id: i.id,
+    url: i.url,
+    enabled: i.enabled,
+    createdAt: i.createdAt,
+  };
+}
+
+function newIntegrationDraft(index: number): IntegrationDraft {
+  return {
+    localId: `new-${Date.now()}-${index}`,
+    url: "",
+    enabled: true,
+  };
+}
+
+function isHttpUrl(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://");
+}
 
 function describeError(e: unknown, fallback: string): string {
   return e instanceof ContractError && e.status !== 0 ? e.message : fallback;
@@ -67,6 +97,9 @@ export function ChannelEditor({
   );
   const [deviceIds, setDeviceIds] = useState<string[]>(channel?.deviceIds ?? []);
   const [appIds, setAppIds] = useState<string[]>(channel?.appIds ?? []);
+  const [integrations, setIntegrations] = useState<IntegrationDraft[]>(
+    (channel?.integrations ?? []).map(integrationDraftFromApi),
+  );
   const [schedule, setSchedule] = useState<Schedule>(
     channel?.schedule ?? EMPTY_SCHEDULE,
   );
@@ -87,6 +120,28 @@ export function ChannelEditor({
     setAppIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
+  }
+
+  function addIntegration() {
+    setIntegrations((prev) => [...prev, newIntegrationDraft(prev.length)]);
+  }
+
+  function updateIntegrationUrl(localId: string, url: string) {
+    setIntegrations((prev) =>
+      prev.map((item) => (item.localId === localId ? { ...item, url } : item)),
+    );
+  }
+
+  function toggleIntegration(localId: string) {
+    setIntegrations((prev) =>
+      prev.map((item) =>
+        item.localId === localId ? { ...item, enabled: !item.enabled } : item,
+      ),
+    );
+  }
+
+  function removeIntegration(localId: string) {
+    setIntegrations((prev) => prev.filter((item) => item.localId !== localId));
   }
 
   // Apps disponibles = unión de las apps de los dispositivos seleccionados, con
@@ -166,8 +221,21 @@ export function ChannelEditor({
       setSection("info");
       return;
     }
+    const invalidIntegration = integrations.find(
+      (item) => item.url.trim() === "" || !isHttpUrl(item.url),
+    );
+    if (invalidIntegration) {
+      setError("Cada integración debe tener una URL http o https válida");
+      setSection("integrations");
+      return;
+    }
     setSaving(true);
     setError(null);
+    const integrationInputs = integrations.map((item) => ({
+      id: item.id,
+      url: item.url.trim(),
+      enabled: item.enabled,
+    }));
     try {
       if (channel) {
         await api.call("updateChannel", {
@@ -178,6 +246,7 @@ export function ChannelEditor({
           subscriberIds: members,
           deviceIds,
           appIds,
+          integrations: integrationInputs,
           schedule,
         });
       } else {
@@ -188,6 +257,7 @@ export function ChannelEditor({
           subscriberIds: members,
           deviceIds,
           appIds,
+          integrations: integrationInputs,
           schedule,
         });
       }
@@ -340,7 +410,14 @@ export function ChannelEditor({
         ) : null}
 
         {section === "integrations" ? (
-          <IntegrationsSection editable={editable} />
+          <IntegrationsSection
+            editable={editable}
+            integrations={integrations}
+            onAdd={addIntegration}
+            onChangeUrl={updateIntegrationUrl}
+            onToggle={toggleIntegration}
+            onRemove={removeIntegration}
+          />
         ) : null}
 
         {section === "notifications" ? (
@@ -1233,25 +1310,194 @@ function NotificationsSection({
 
 /* ---------- Integraciones ---------- */
 
-function IntegrationsSection({ editable }: { editable: boolean }) {
+function IntegrationsSection({
+  editable,
+  integrations,
+  onAdd,
+  onChangeUrl,
+  onToggle,
+  onRemove,
+}: {
+  editable: boolean;
+  integrations: IntegrationDraft[];
+  onAdd: () => void;
+  onChangeUrl: (localId: string, url: string) => void;
+  onToggle: (localId: string) => void;
+  onRemove: (localId: string) => void;
+}) {
   return (
     <view style={{ display: "flex", flexDirection: "column" }}>
-      <text
-        accessibility-heading={true}
+      <view
         style={{
-          color: colors.text,
-          fontSize: "20px",
-          fontWeight: "bold",
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
           marginTop: "12px",
+          marginBottom: "8px",
         }}
       >
-        Integraciones
-      </text>
-      <text style={{ color: colors.textFaint, fontSize: "14px", marginTop: "16px" }}>
-        {editable
-          ? "Aún no hay integraciones configuradas."
-          : "Este canal no tiene integraciones."}
-      </text>
+        <text
+          accessibility-heading={true}
+          style={{ color: colors.text, fontSize: "20px", fontWeight: "bold" }}
+        >
+          Integraciones
+        </text>
+        <text style={{ color: colors.textMuted, fontSize: "13px" }}>
+          {integrations.length} petición{integrations.length === 1 ? "" : "es"}
+        </text>
+      </view>
+
+      {editable ? (
+        <Pressable
+          label="Agregar petición POST"
+          onTap={onAdd}
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.surface,
+            borderRadius: "12px",
+            borderWidth: "1px",
+            borderColor: colors.primary,
+            height: "48px",
+            marginBottom: "12px",
+          }}
+        >
+          <text
+            accessibility-elements-hidden={true}
+            style={{ color: colors.primary, fontSize: "15px", fontWeight: "bold" }}
+          >
+            + Agregar petición
+          </text>
+        </Pressable>
+      ) : null}
+
+      {integrations.length === 0 ? (
+        <text style={{ color: colors.textFaint, fontSize: "14px", marginTop: "8px" }}>
+          {editable
+            ? "Aún no hay peticiones configuradas."
+            : "Este canal no tiene integraciones."}
+        </text>
+      ) : null}
+
+      {integrations.map((item, index) => (
+        <view
+          key={item.localId}
+          style={{
+            backgroundColor: colors.surface,
+            borderRadius: "14px",
+            borderWidth: "1px",
+            borderColor: colors.border,
+            padding: "12px",
+            marginBottom: "12px",
+          }}
+        >
+          <view
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "10px",
+            }}
+          >
+            <text style={{ color: colors.text, fontSize: "15px", fontWeight: "bold" }}>
+              Petición POST {index + 1}
+            </text>
+            {editable ? (
+              <Pressable
+                label={`Activar petición POST ${index + 1}`}
+                traits="none"
+                value={item.enabled ? "activada" : "desactivada"}
+                onTap={() => onToggle(item.localId)}
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  width: "86px",
+                  height: "32px",
+                  borderRadius: "18px",
+                  backgroundColor: item.enabled ? colors.successSoft : colors.surfaceMuted,
+                  paddingLeft: "8px",
+                  paddingRight: "8px",
+                  justifyContent: "space-between",
+                }}
+              >
+                <text
+                  accessibility-elements-hidden={true}
+                  style={{
+                    color: item.enabled ? colors.success : colors.textMuted,
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {item.enabled ? "Activa" : "Pausada"}
+                </text>
+                <Checkbox on={item.enabled} shape="round" />
+              </Pressable>
+            ) : (
+              <text
+                style={{
+                  color: item.enabled ? colors.success : colors.textMuted,
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                }}
+              >
+                {item.enabled ? "Activa" : "Pausada"}
+              </text>
+            )}
+          </view>
+
+          {editable ? (
+            <input
+              {...({ value: item.url } as Record<string, string>)}
+              accessibility-label={`URL de la petición POST ${index + 1}`}
+              style={{
+                backgroundColor: colors.surfaceInput,
+                borderRadius: "10px",
+                height: "46px",
+                color: colors.text,
+                fontSize: "13px",
+                paddingLeft: "12px",
+                paddingRight: "12px",
+                marginBottom: "10px",
+              }}
+              placeholder="https://api.ejemplo.com/webhook"
+              placeholder-color={colors.textFaint}
+              bindinput={(e: InputEvent) => onChangeUrl(item.localId, e.detail.value)}
+            />
+          ) : (
+            <text style={{ color: colors.textSecondary, fontSize: "13px", lineHeight: "18px" }}>
+              {item.url}
+            </text>
+          )}
+
+          {editable ? (
+            <Pressable
+              label={`Eliminar petición POST ${index + 1}`}
+              onTap={() => onRemove(item.localId)}
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: colors.dangerSoft,
+                borderRadius: "8px",
+                paddingLeft: "10px",
+                paddingRight: "10px",
+                paddingTop: "6px",
+                paddingBottom: "6px",
+              }}
+            >
+              <text
+                accessibility-elements-hidden={true}
+                style={{ color: colors.danger, fontSize: "12px", fontWeight: "bold" }}
+              >
+                Eliminar
+              </text>
+            </Pressable>
+          ) : null}
+        </view>
+      ))}
     </view>
   );
 }

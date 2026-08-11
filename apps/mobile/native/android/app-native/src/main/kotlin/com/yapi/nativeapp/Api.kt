@@ -74,6 +74,13 @@ object Api {
     )
 
     @Serializable
+    data class ChannelIntegrationReq(
+        val id: String? = null,
+        val url: String,
+        val enabled: Boolean = true,
+    )
+
+    @Serializable
     data class CreateChannelReq(
         val name: String,
         val description: String = "",
@@ -81,6 +88,7 @@ object Api {
         val subscriberIds: List<String> = emptyList(),
         val deviceIds: List<String> = emptyList(),
         val appIds: List<String> = emptyList(),
+        val integrations: List<ChannelIntegrationReq> = emptyList(),
         val schedule: JsonElement? = null,
     )
 
@@ -99,6 +107,7 @@ object Api {
         val subscriberIds: List<String>? = null,
         val deviceIds: List<String>? = null,
         val appIds: List<String>? = null,
+        val integrations: List<ChannelIntegrationReq>? = null,
         val schedule: JsonElement? = null,
     )
 

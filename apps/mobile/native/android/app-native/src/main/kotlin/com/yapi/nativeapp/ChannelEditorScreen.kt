@@ -61,6 +61,13 @@ import kotlinx.coroutines.launch
 
 private enum class EditorTab(val label: String) { Info("Información"), Users("Usuarios"), Integrations("Integraciones"), Notifs("Notificaciones") }
 
+private data class IntegrationDraft(
+    val key: String,
+    val id: String? = null,
+    val url: String = "",
+    val enabled: Boolean = true,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) {
@@ -83,6 +90,13 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
     var schedDays by remember { mutableStateOf(channel?.schedule?.days?.toSet() ?: emptySet()) }
     var schedStart by remember { mutableStateOf(channel?.schedule?.start ?: "") }
     var schedEnd by remember { mutableStateOf(channel?.schedule?.end ?: "") }
+    var integrations by remember {
+        mutableStateOf(
+            channel?.integrations?.map {
+                IntegrationDraft(key = it.id, id = it.id, url = it.url, enabled = it.enabled)
+            } ?: emptyList(),
+        )
+    }
 
     var devices by remember { mutableStateOf<List<Device>>(emptyList()) }
     var users by remember { mutableStateOf<List<User>>(emptyList()) }
@@ -115,6 +129,11 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
     fun save() {
         if (saving) return
         if (name.isBlank()) { tab = EditorTab.Info; error = "Ponle un nombre al canal"; return }
+        if (integrations.any { !isHttpUrl(it.url) }) {
+            tab = EditorTab.Integrations
+            error = "Cada integración debe tener una URL http o https válida"
+            return
+        }
         error = null
         saving = true
         val scheduleJson = if (schedDays.isEmpty() && schedStart.isBlank() && schedEnd.isBlank()) null
@@ -123,6 +142,9 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
             schedStart.ifBlank { null },
             schedEnd.ifBlank { null },
         )
+        val integrationReqs = integrations.map {
+            Api.ChannelIntegrationReq(id = it.id, url = it.url.trim(), enabled = it.enabled)
+        }
         scope.launch {
             try {
                 if (editing) {
@@ -131,7 +153,7 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
                         Api.UpdateChannelReq(
                             id = channel!!.id, name = name, description = description, enabled = enabled,
                             subscriberIds = selMembers.toList(), deviceIds = selDevices.toList(),
-                            appIds = selApps.toList(), schedule = scheduleJson,
+                            appIds = selApps.toList(), integrations = integrationReqs, schedule = scheduleJson,
                         ),
                     )
                 } else {
@@ -140,7 +162,7 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
                         Api.CreateChannelReq(
                             name = name, description = description, enabled = enabled,
                             subscriberIds = selMembers.toList(), deviceIds = selDevices.toList(),
-                            appIds = selApps.toList(), schedule = scheduleJson,
+                            appIds = selApps.toList(), integrations = integrationReqs, schedule = scheduleJson,
                         ),
                     )
                 }
@@ -215,7 +237,19 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
                     onInvite = { inviteSheet = true },
                     onRemove = { id -> selMembers = selMembers - id },
                 )
-                EditorTab.Integrations -> IntegrationsTab()
+                EditorTab.Integrations -> IntegrationsTab(
+                    integrations = integrations,
+                    onAdd = {
+                        integrations = integrations + IntegrationDraft(key = "new-${System.currentTimeMillis()}-${integrations.size}")
+                    },
+                    onUrl = { key, url ->
+                        integrations = integrations.map { if (it.key == key) it.copy(url = url) else it }
+                    },
+                    onToggle = { key ->
+                        integrations = integrations.map { if (it.key == key) it.copy(enabled = !it.enabled) else it }
+                    },
+                    onRemove = { key -> integrations = integrations.filterNot { it.key == key } },
+                )
                 EditorTab.Notifs -> NotificationsTab(
                     channelId = channel?.id, notifications = notifications,
                     onPublished = { notifications = listOf(it) + notifications },
@@ -361,10 +395,58 @@ private fun UsersTab(
 /* ---------------------------- Integraciones ---------------------------- */
 
 @Composable
-private fun IntegrationsTab() {
-    Text("Integraciones", color = Yapi.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(16.dp))
-    Text("Aún no hay integraciones configuradas.", color = Yapi.textFaint, fontSize = 14.sp)
+private fun IntegrationsTab(
+    integrations: List<IntegrationDraft>,
+    onAdd: () -> Unit,
+    onUrl: (String, String) -> Unit,
+    onToggle: (String) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Integraciones", color = Yapi.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("${integrations.size} petición${if (integrations.size == 1) "" else "es"}", color = Yapi.textMuted, fontSize = 13.sp)
+    }
+    Spacer(Modifier.height(12.dp))
+    Button(
+        onClick = onAdd,
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Yapi.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Yapi.primary),
+    ) { Text("+ Agregar petición", color = Yapi.primary, fontWeight = FontWeight.Bold) }
+    Spacer(Modifier.height(12.dp))
+    if (integrations.isEmpty()) {
+        Text("Aún no hay peticiones configuradas.", color = Yapi.textFaint, fontSize = 14.sp)
+    }
+    integrations.forEachIndexed { index, item ->
+        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(14.dp)).background(Yapi.surface).padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Petición POST ${index + 1}", color = Yapi.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (item.enabled) "Activa" else "Pausada",
+                        color = if (item.enabled) Yapi.success else Yapi.textMuted,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Switch(
+                        checked = item.enabled,
+                        onCheckedChange = { onToggle(item.key) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Yapi.text,
+                            checkedTrackColor = Yapi.success,
+                            uncheckedTrackColor = Yapi.surfaceMuted,
+                        ),
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            EditorInput(item.url, { onUrl(item.key, it) }, "https://api.ejemplo.com/webhook", surface = Yapi.surfaceInput)
+            Spacer(Modifier.height(8.dp))
+            Text("Eliminar", color = Yapi.danger, fontSize = 13.sp, modifier = Modifier.clickable { onRemove(item.key) })
+        }
+    }
 }
 
 /* ---------------------------- Notificaciones --------------------------- */
@@ -543,6 +625,11 @@ private fun scheduleSummary(days: Set<Int>, start: String, end: String): String 
     val d = if (days.isEmpty()) "Todos los días" else days.sorted().joinToString(" ") { DAY_LABELS[it] }
     val time = if (start.isNotBlank() || end.isNotBlank()) "  ${start.ifBlank { "00:00" }}-${end.ifBlank { "23:59" }}" else ""
     return d + time
+}
+
+private fun isHttpUrl(value: String): Boolean {
+    val trimmed = value.trim()
+    return trimmed.startsWith("https://") || trimmed.startsWith("http://")
 }
 
 @Composable

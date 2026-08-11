@@ -142,6 +142,21 @@ export const channelNotifications = sqliteTable(
   (t) => [index("channel_notifications_channel_idx").on(t.channelId)],
 );
 
+/** Peticiones POST salientes que se ejecutan cuando llega una notificación al canal. */
+export const channelIntegrations = sqliteTable(
+  "channel_integrations",
+  {
+    id: text("id").primaryKey(),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("channel_integrations_channel_idx").on(t.channelId)],
+);
+
 /**
  * Dispositivos de un usuario. Combina el dispositivo "con nombre" que se ve en
  * Configuración (renombrable, con toggle de notificador) y el token FCM para
@@ -184,6 +199,8 @@ export type NewChannel = typeof channels.$inferInsert;
 export type ChannelSubscriber = typeof channelSubscribers.$inferSelect;
 export type ChannelNotification = typeof channelNotifications.$inferSelect;
 export type NewChannelNotification = typeof channelNotifications.$inferInsert;
+export type ChannelIntegration = typeof channelIntegrations.$inferSelect;
+export type NewChannelIntegration = typeof channelIntegrations.$inferInsert;
 export type Device = typeof devices.$inferSelect;
 export type NewDevice = typeof devices.$inferInsert;
 export type App = typeof apps.$inferSelect;

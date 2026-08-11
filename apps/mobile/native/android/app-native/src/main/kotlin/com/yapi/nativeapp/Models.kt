@@ -45,6 +45,14 @@ data class ChannelNotification(
 )
 
 @Serializable
+data class ChannelIntegration(
+    val id: String,
+    val url: String,
+    val enabled: Boolean,
+    val createdAt: String,
+)
+
+@Serializable
 data class Channel(
     val id: String,
     val name: String,
@@ -56,6 +64,7 @@ data class Channel(
     val notifications: List<ChannelNotification> = emptyList(),
     val deviceIds: List<String> = emptyList(),
     val appIds: List<String> = emptyList(),
+    val integrations: List<ChannelIntegration> = emptyList(),
     val schedule: Schedule = Schedule(),
     val isOwner: Boolean = false,
     val isSubscribed: Boolean = false,

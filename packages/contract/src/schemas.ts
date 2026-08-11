@@ -87,6 +87,31 @@ export const ChannelNotification = z.object({
 });
 export type ChannelNotification = z.infer<typeof ChannelNotification>;
 
+const HttpPostUrl = z.string().trim().url().refine(
+  (value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  },
+  { message: "La URL debe usar http o https" },
+);
+
+/** Petición POST configurada para dispararse cuando llega una notificación. */
+export const ChannelIntegration = z.object({
+  id: z.string(),
+  url: HttpPostUrl,
+  enabled: z.boolean(),
+  createdAt: z.string(),
+});
+export type ChannelIntegration = z.infer<typeof ChannelIntegration>;
+
+/** Entrada editable de una integración del canal. */
+export const ChannelIntegrationInput = z.object({
+  id: z.string().optional(),
+  url: HttpPostUrl,
+  enabled: z.boolean().default(true),
+});
+export type ChannelIntegrationInput = z.infer<typeof ChannelIntegrationInput>;
+
 export const Channel = z.object({
   id: z.string(),
   name: z.string(),
@@ -102,6 +127,8 @@ export const Channel = z.object({
   deviceIds: z.array(z.string()),
   /** Apps a las que apunta el canal. */
   appIds: z.array(z.string()),
+  /** Peticiones POST salientes configuradas por el dueño. */
+  integrations: z.array(ChannelIntegration),
   /** Horario del canal (días + franja). */
   schedule: Schedule,
   /** Calculado para el usuario autenticado. */
@@ -124,6 +151,7 @@ export const CreateChannelInput = z.object({
   subscriberIds: z.array(z.string()).default([]),
   deviceIds: z.array(z.string()).default([]),
   appIds: z.array(z.string()).default([]),
+  integrations: z.array(ChannelIntegrationInput).optional(),
   schedule: Schedule.optional(),
 });
 export type CreateChannelInput = z.infer<typeof CreateChannelInput>;
@@ -137,6 +165,7 @@ export const UpdateChannelInput = z.object({
   subscriberIds: z.array(z.string()).optional(),
   deviceIds: z.array(z.string()).optional(),
   appIds: z.array(z.string()).optional(),
+  integrations: z.array(ChannelIntegrationInput).optional(),
   schedule: Schedule.optional(),
 });
 export type UpdateChannelInput = z.infer<typeof UpdateChannelInput>;

@@ -7,6 +7,7 @@ import {
   channels,
   channelSubscribers,
   channelNotifications,
+  channelIntegrations,
   channelDevices,
   channelApps,
   devices,
@@ -16,7 +17,9 @@ import {
   type User as DbUser,
   type Channel as DbChannel,
   type ChannelNotification as DbNotification,
+  type ChannelIntegration as DbIntegration,
   type Device as DbDevice,
+  type App as DbApp,
 } from "@yapi/db/schema";
 import type { D1Database } from "@cloudflare/workers-types";
 import {
@@ -30,6 +33,8 @@ import {
   type User as ApiUser,
   type Channel as ApiChannel,
   type ChannelNotification as ApiNotification,
+  type ChannelIntegration as ApiIntegration,
+  type ChannelIntegrationInput as ApiIntegrationInput,
   type Device as ApiDevice,
   type App as ApiApp,
   type AppRef,
@@ -98,6 +103,15 @@ function toApiNotification(n: DbNotification): ApiNotification {
     description: n.description,
     sourceApp: n.sourceApp,
     timestamp: n.createdAt,
+  };
+}
+
+function toApiIntegration(i: DbIntegration): ApiIntegration {
+  return {
+    id: i.id,
+    url: i.url,
+    enabled: i.enabled,
+    createdAt: i.createdAt,
   };
 }
 
@@ -220,13 +234,14 @@ async function assembleChannels(
     : await db.select().from(channels).all();
   if (chRows.length === 0) return [];
 
-  const [userRows, subRows, notifRows, chDevRows, chAppRows] =
+  const [userRows, subRows, notifRows, chDevRows, chAppRows, integrationRows] =
     await Promise.all([
       db.select().from(users).all(),
       db.select().from(channelSubscribers).all(),
       db.select().from(channelNotifications).all(),
       db.select().from(channelDevices).all(),
       db.select().from(channelApps).all(),
+      db.select().from(channelIntegrations).all(),
     ]);
 
   const userMap = new Map(userRows.map((u) => [u.id, toApiUser(u)]));
@@ -265,6 +280,13 @@ async function assembleChannels(
         .filter((d) => d.channelId === c.id)
         .map((d) => d.deviceId),
       appIds: chAppRows.filter((a) => a.channelId === c.id).map((a) => a.appId),
+      integrations:
+        c.publisherId === currentUserId
+          ? integrationRows
+              .filter((i) => i.channelId === c.id)
+              .map(toApiIntegration)
+              .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          : [],
       schedule: scheduleFromRow(c),
       isOwner: c.publisherId === currentUserId,
       isSubscribed: myStatus === "accepted",
@@ -477,6 +499,7 @@ app.post("/channels", async (c) => {
 
   await setChannelDevices(db, id, await ownDeviceIds(db, me.id, parsed.data.deviceIds));
   await setChannelApps(db, id, await existingAppIds(db, parsed.data.appIds));
+  await setChannelIntegrations(db, id, parsed.data.integrations ?? []);
 
   const [ch] = await assembleChannels(db, me.id, id);
   return c.json(ch, 201);
@@ -515,6 +538,9 @@ app.put("/channels/:id", async (c) => {
   }
   if (data.appIds !== undefined) {
     await setChannelApps(db, id, await existingAppIds(db, data.appIds));
+  }
+  if (data.integrations !== undefined) {
+    await setChannelIntegrations(db, id, data.integrations);
   }
 
   const [ch] = await assembleChannels(db, me.id, id);
@@ -558,6 +584,14 @@ app.post("/channels/:id/notifications", async (c) => {
     createdAt: new Date().toISOString(),
   };
   await db.insert(channelNotifications).values(notif);
+
+  c.executionCtx?.waitUntil?.(
+    postNotificationIntegrations(db, id, notif, me, {
+      kind: "manual",
+      route: "/channels/:id/notifications",
+      pushRequested: parsed.data.push === true,
+    }).catch((e) => console.warn("integración falló:", e)),
+  );
 
   // Best-effort: si se pide push y el server está configurado, dispara los envíos
   // a los dispositivos de los suscriptores con notificador activo. No bloquea la
@@ -771,6 +805,17 @@ app.post("/ingest", async (c) => {
     };
     await db.insert(channelNotifications).values(notif);
     matched++;
+
+    c.executionCtx?.waitUntil?.(
+      postNotificationIntegrations(db, ch.id, notif, me, {
+        kind: "ingest",
+        route: "/ingest",
+        postedAt: postedAt ?? null,
+        device: toApiDevice(device, await deviceAppsList(db, device.id)),
+        app: { id: app2.id, package: app2.package, label: app2.label },
+        package: pkg,
+      }).catch((e) => console.warn("integración falló:", e)),
+    );
 
     if (fcmConfigured(c.env) || c.env.PUSH_SERVER_URL) {
       c.executionCtx?.waitUntil?.(
@@ -1004,9 +1049,159 @@ async function setChannelApps(
   }
 }
 
+async function setChannelIntegrations(
+  db: Db,
+  channelId: string,
+  inputs: ApiIntegrationInput[],
+): Promise<void> {
+  const existing = await db
+    .select()
+    .from(channelIntegrations)
+    .where(eq(channelIntegrations.channelId, channelId))
+    .all();
+  const existingById = new Map(existing.map((integration) => [integration.id, integration]));
+
+  await db.delete(channelIntegrations).where(eq(channelIntegrations.channelId, channelId));
+  const unique = new Map<string, ApiIntegrationInput>();
+  for (const input of inputs) {
+    const url = input.url.trim();
+    if (!url) continue;
+    unique.set(url, { id: input.id, url, enabled: input.enabled });
+  }
+  const now = new Date().toISOString();
+  const values = [...unique.values()].map((input) => {
+    const previous = input.id ? existingById.get(input.id) : undefined;
+    return {
+      id: previous?.id ?? crypto.randomUUID(),
+      channelId,
+      url: input.url,
+      enabled: input.enabled,
+      createdAt: previous?.createdAt ?? now,
+    };
+  });
+  if (values.length > 0) await db.insert(channelIntegrations).values(values);
+}
+
 /** Apps (permitidas) de un único dispositivo. */
 async function deviceAppsList(db: Db, deviceId: string): Promise<ApiApp[]> {
   return (await appsByDevice(db, [deviceId])).get(deviceId) ?? [];
+}
+
+type IntegrationSource =
+  | {
+      kind: "manual";
+      route: "/channels/:id/notifications";
+      pushRequested: boolean;
+    }
+  | {
+      kind: "ingest";
+      route: "/ingest";
+      postedAt: string | null;
+      device: ApiDevice;
+      app: ApiApp;
+      package: string;
+    };
+
+function toApiApp(a: DbApp): ApiApp {
+  return { id: a.id, package: a.package, label: a.label };
+}
+
+async function publicDevicesForChannel(
+  db: Db,
+  deviceIds: string[],
+): Promise<ApiDevice[]> {
+  if (deviceIds.length === 0) return [];
+  const rows = await db
+    .select()
+    .from(devices)
+    .where(inArray(devices.id, deviceIds))
+    .all();
+  const appsMap = await appsByDevice(db, rows.map((d) => d.id));
+  return rows
+    .map((d) => toApiDevice(d, appsMap.get(d.id) ?? []))
+    .sort(byName);
+}
+
+async function publicAppsForChannel(db: Db, appIds: string[]): Promise<ApiApp[]> {
+  if (appIds.length === 0) return [];
+  const rows = await db.select().from(apps).where(inArray(apps.id, appIds)).all();
+  return rows.map(toApiApp).sort(byLabel);
+}
+
+async function postNotificationIntegrations(
+  db: Db,
+  channelId: string,
+  notification: DbNotification,
+  actor: DbUser,
+  source: IntegrationSource,
+): Promise<void> {
+  const rows = await db
+    .select()
+    .from(channelIntegrations)
+    .where(
+      and(
+        eq(channelIntegrations.channelId, channelId),
+        eq(channelIntegrations.enabled, true),
+      ),
+    )
+    .all();
+  if (rows.length === 0) return;
+
+  const channel = await db
+    .select()
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .get();
+  if (!channel) return;
+
+  const [apiChannel] = await assembleChannels(db, channel.publisherId, channelId);
+  if (!apiChannel) return;
+
+  const { notifications: _notifications, integrations: _integrations, ...channelBody } =
+    apiChannel;
+  const payloadBase = {
+    event: "channel.notification.created",
+    deliveredAt: new Date().toISOString(),
+    actor: toApiUser(actor),
+    channel: channelBody,
+    notification: toApiNotification(notification),
+    routing: {
+      devices: await publicDevicesForChannel(db, apiChannel.deviceIds),
+      apps: await publicAppsForChannel(db, apiChannel.appIds),
+    },
+    source,
+  };
+
+  await Promise.all(
+    rows.map((integration) =>
+      postIntegrationRequest(integration, {
+        ...payloadBase,
+        integration: toApiIntegration(integration),
+      }),
+    ),
+  );
+}
+
+async function postIntegrationRequest(
+  integration: DbIntegration,
+  payload: unknown,
+): Promise<void> {
+  try {
+    const res = await fetch(integration.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Yapi-Event": "channel.notification.created",
+        "X-Yapi-Integration-Id": integration.id,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.warn(`integración ${integration.id} respondió ${res.status}`);
+    }
+  } catch (e) {
+    console.warn(`integración ${integration.id} no respondió:`, e);
+  }
 }
 
 function defaultDeviceName(platform?: string): string {

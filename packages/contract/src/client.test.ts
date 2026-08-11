@@ -33,6 +33,40 @@ const DEVICE_BODY = {
   createdAt: "2026-01-01T00:00:00.000Z",
 };
 
+const USER_BODY = {
+  id: "u1",
+  name: "Ada",
+  handle: "ada",
+  email: null,
+  phone: null,
+  color: "#2f6fed",
+};
+
+const CHANNEL_BODY = {
+  id: "c1",
+  name: "Alertas",
+  description: "",
+  enabled: true,
+  publisher: USER_BODY,
+  subscribers: [],
+  pendingInvites: [],
+  notifications: [],
+  deviceIds: [],
+  appIds: [],
+  integrations: [
+    {
+      id: "i1",
+      url: "https://hooks.test/yapi",
+      enabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  schedule: { days: null, start: null, end: null },
+  isOwner: true,
+  isSubscribed: false,
+  isInvited: false,
+};
+
 describe("createClient", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -91,6 +125,28 @@ describe("createClient", () => {
       expect((lastCall().init.headers as Record<string, string>).Authorization).toBe(
         "Bearer 2",
       );
+    });
+
+    it("envía integraciones POST al crear un canal", async () => {
+      vi.unstubAllGlobals();
+      lastCall = stubFetch({ ok: true, status: 201, body: CHANNEL_BODY });
+      const api = createClient({ baseUrls: { worker: "http://w.test" } });
+
+      const res = await api.call("createChannel", {
+        name: "Alertas",
+        description: "",
+        enabled: true,
+        subscriberIds: [],
+        deviceIds: [],
+        appIds: [],
+        integrations: [{ url: "https://hooks.test/yapi", enabled: true }],
+      });
+
+      expect(lastCall().url).toBe("http://w.test/channels");
+      expect(JSON.parse(lastCall().init.body as string)).toMatchObject({
+        integrations: [{ url: "https://hooks.test/yapi", enabled: true }],
+      });
+      expect(res.integrations[0]?.url).toBe("https://hooks.test/yapi");
     });
   });
 
