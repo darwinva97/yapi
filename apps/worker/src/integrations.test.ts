@@ -194,6 +194,33 @@ async function createChannel(body: Record<string, unknown>): Promise<Channel> {
   return channel;
 }
 
+describe("webhook público de ejemplo", () => {
+  it("recibe un POST JSON y responde con los datos útiles para probar integraciones", async () => {
+    const res = await app.request("/webhooks/example", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Yapi-Event": "channel.notification.created",
+        "X-Yapi-Integration-Id": "integration-1",
+      },
+      body: JSON.stringify({ title: "Ping", nested: { ok: true } }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      ok: true,
+      method: "POST",
+      path: "/webhooks/example",
+      event: "channel.notification.created",
+      integrationId: "integration-1",
+      contentType: "application/json",
+      body: { title: "Ping", nested: { ok: true } },
+    });
+    expect(body.receivedAt).toEqual(expect.any(String));
+  });
+});
+
 describe("integraciones POST del worker", () => {
   it("publica cada notificación manual en las integraciones activas del canal", async () => {
     const posts = captureIntegrationPosts();

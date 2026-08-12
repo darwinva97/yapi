@@ -416,6 +416,39 @@ app.get("/health", (c) => {
   return c.json(body);
 });
 
+app.get("/webhooks/example", (c) =>
+  c.json({
+    ok: true,
+    name: "yapi example webhook",
+    method: "POST",
+    url: new URL(c.req.url).origin + "/webhooks/example",
+  }),
+);
+
+app.post("/webhooks/example", async (c) => {
+  const contentType = c.req.header("Content-Type") ?? "";
+  const rawBody = await c.req.text();
+  let body: unknown = rawBody;
+  if (contentType.toLowerCase().includes("application/json")) {
+    try {
+      body = rawBody.trim() ? JSON.parse(rawBody) : null;
+    } catch {
+      body = rawBody;
+    }
+  }
+
+  return c.json({
+    ok: true,
+    receivedAt: new Date().toISOString(),
+    method: c.req.method,
+    path: new URL(c.req.url).pathname,
+    event: c.req.header("X-Yapi-Event") ?? null,
+    integrationId: c.req.header("X-Yapi-Integration-Id") ?? null,
+    contentType: contentType || null,
+    body,
+  });
+});
+
 /** Siembra la BD con datos de demo si está vacía (idempotente). Útil en dev. */
 app.post("/dev/seed", async (c) => {
   const db = createDb(c.env.DB);
