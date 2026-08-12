@@ -151,10 +151,14 @@ function captureIntegrationPosts(): IntegrationPost[] {
   const posts: IntegrationPost[] = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn((url: string | URL | Request, init?: RequestInit) => {
+    vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const requestUrl =
         typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
-      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      const rawBody =
+        init?.body instanceof Blob
+          ? await init.body.text()
+          : String(init?.body ?? "{}");
+      const body = JSON.parse(rawBody) as Record<string, unknown>;
       posts.push({ url: requestUrl, init: init ?? {}, body });
       return Promise.resolve(new Response("ok", { status: 200 }));
     }),
@@ -265,14 +269,10 @@ describe("integraciones POST del worker", () => {
       expect(post.init.method).toBe("POST");
       expect(post.init.headers).toMatchObject({
         "Content-Type": "application/json",
-        "Content-Length": expect.any(String),
         "X-Yapi-Event": "channel.notification.created",
         "X-Yapi-Payload-Bytes": expect.any(String),
       });
-      expect(Number((post.init.headers as Record<string, string>)["Content-Length"])).toBeGreaterThan(0);
-      expect((post.init.headers as Record<string, string>)["Content-Length"]).toBe(
-        (post.init.headers as Record<string, string>)["X-Yapi-Payload-Bytes"],
-      );
+      expect(Number((post.init.headers as Record<string, string>)["X-Yapi-Payload-Bytes"])).toBeGreaterThan(0);
       expect(post.body.channel).not.toHaveProperty("integrations");
       expect(post.body.channel).not.toHaveProperty("notifications");
       expect(post.body).toMatchObject({

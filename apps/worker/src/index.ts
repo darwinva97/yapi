@@ -1229,12 +1229,11 @@ async function postIntegrationRequest(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Content-Length": String(bodyBytes),
         "X-Yapi-Event": "channel.notification.created",
         "X-Yapi-Integration-Id": integration.id,
         "X-Yapi-Payload-Bytes": String(bodyBytes),
       },
-      body,
+      body: new Blob([body], { type: "application/json" }),
     });
     if (!res.ok) {
       console.warn(`integración ${integration.id} respondió ${res.status}`);
