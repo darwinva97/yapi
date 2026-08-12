@@ -14,7 +14,7 @@
 
     <application
         android:label="yapi (nativo)"
-        android:usesCleartextTraffic="false"
+        android:usesCleartextTraffic="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Yapi">
 

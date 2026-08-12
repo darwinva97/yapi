@@ -95,11 +95,15 @@ const HttpPostUrl = z.string().trim().url().refine(
   { message: "La URL debe usar http o https" },
 );
 
+export const ChannelIntegrationExecutor = z.enum(["client", "server"]);
+export type ChannelIntegrationExecutor = z.infer<typeof ChannelIntegrationExecutor>;
+
 /** Petición POST configurada para dispararse cuando llega una notificación. */
 export const ChannelIntegration = z.object({
   id: z.string(),
   url: HttpPostUrl,
   enabled: z.boolean(),
+  executor: ChannelIntegrationExecutor,
   createdAt: z.string(),
 });
 export type ChannelIntegration = z.infer<typeof ChannelIntegration>;
@@ -109,8 +113,19 @@ export const ChannelIntegrationInput = z.object({
   id: z.string().optional(),
   url: HttpPostUrl,
   enabled: z.boolean().default(true),
+  executor: ChannelIntegrationExecutor.default("client"),
 });
 export type ChannelIntegrationInput = z.infer<typeof ChannelIntegrationInput>;
+
+/** Petición que debe ejecutar la app cliente después de una ingesta. */
+export const IntegrationWebhookRequest = z.object({
+  id: z.string(),
+  url: HttpPostUrl,
+  event: z.literal("channel.notification.created"),
+  headers: z.record(z.string(), z.string()),
+  body: z.record(z.string(), z.unknown()),
+});
+export type IntegrationWebhookRequest = z.infer<typeof IntegrationWebhookRequest>;
 
 export const Channel = z.object({
   id: z.string(),
@@ -265,6 +280,8 @@ export type IngestInput = z.infer<typeof IngestInput>;
 export const IngestResponse = z.object({
   /** A cuántos canales se reenvió (0 si nada coincidió o estaba fuera de horario). */
   matched: z.number(),
+  /** Webhooks que debe ejecutar el cliente desde el dispositivo. */
+  clientRequests: z.array(IntegrationWebhookRequest).default([]),
 });
 export type IngestResponse = z.infer<typeof IngestResponse>;
 

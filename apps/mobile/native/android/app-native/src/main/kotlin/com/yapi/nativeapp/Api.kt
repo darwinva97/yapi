@@ -78,6 +78,7 @@ object Api {
         val id: String? = null,
         val url: String,
         val enabled: Boolean = true,
+        val executor: String = "client",
     )
 
     @Serializable

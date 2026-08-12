@@ -152,6 +152,7 @@ export const channelIntegrations = sqliteTable(
       .references(() => channels.id, { onDelete: "cascade" }),
     url: text("url").notNull(),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    executor: text("executor").notNull().default("client"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [index("channel_integrations_channel_idx").on(t.channelId)],

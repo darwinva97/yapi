@@ -8,6 +8,7 @@ import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -48,12 +49,67 @@ class YapiListenerService : NotificationListenerService() {
         Log.i(TAG, "reenviando $pkg -> /ingest")
         try {
             Net.client.newCall(req).execute().use { res ->
+                val responseText = res.body?.string().orEmpty()
                 Log.i(TAG, "ingest resp ${res.code} para $pkg")
+                if (res.isSuccessful) postClientRequests(responseText)
             }
         } catch (e: Exception) {
             Log.w(TAG, "ingest POST falló", e)
         }
     }
+
+    private fun postClientRequests(responseText: String) {
+        if (responseText.isBlank()) return
+        val requests = runCatching {
+            JSONObject(responseText).optJSONArray("clientRequests")
+        }.getOrNull() ?: return
+
+        for (i in 0 until requests.length()) {
+            val request = requests.optJSONObject(i) ?: continue
+            postClientRequest(request)
+        }
+    }
+
+    private fun postClientRequest(request: JSONObject) {
+        val id = request.optString("id", "")
+        val url = request.optString("url", "")
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return
+
+        val body = jsonString(request.opt("body"))
+        val builder = Request.Builder().url(url)
+        val headers = request.optJSONObject("headers")
+        if (headers != null) {
+            val keys = headers.keys()
+            while (keys.hasNext()) {
+                val name = keys.next()
+                if (name.equals("Content-Type", ignoreCase = true)) continue
+                if (name.equals("Content-Length", ignoreCase = true)) continue
+                if (name.equals("Host", ignoreCase = true)) continue
+                if (name.equals("X-Yapi-Payload-Bytes", ignoreCase = true)) continue
+                val value = headers.optString(name, "")
+                if (value.isNotBlank()) builder.addHeader(name, value)
+            }
+        }
+        val outbound = builder
+            .addHeader("X-Yapi-Payload-Bytes", body.toByteArray(Charsets.UTF_8).size.toString())
+            .post(body.toRequestBody(JSON))
+            .build()
+        try {
+            Net.client.newCall(outbound).execute().use { res ->
+                Log.i(TAG, "webhook cliente resp ${res.code} para ${id.ifBlank { url }}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "webhook cliente falló para ${id.ifBlank { url }}", e)
+        }
+    }
+
+    private fun jsonString(value: Any?): String =
+        when (value) {
+            null, JSONObject.NULL -> "{}"
+            is JSONObject -> value.toString()
+            is JSONArray -> value.toString()
+            else -> JSONObject().put("value", value).toString()
+        }
 
     /** Devuelve un idToken válido; refresca con el refresh token si está por vencer. */
     private fun freshToken(data: ListenerPrefs.Data): String? {

@@ -35,6 +35,7 @@ import {
   type ChannelNotification as ApiNotification,
   type ChannelIntegration as ApiIntegration,
   type ChannelIntegrationInput as ApiIntegrationInput,
+  type IntegrationWebhookRequest as ApiIntegrationWebhookRequest,
   type Device as ApiDevice,
   type App as ApiApp,
   type AppRef,
@@ -52,6 +53,8 @@ import {
 
 import { createDb, type Db } from "./db.js";
 import { seedIfEmpty } from "./seed.js";
+
+const INTEGRATION_EVENT = "channel.notification.created" as const;
 
 type Bindings = {
   DB: D1Database;
@@ -111,6 +114,7 @@ function toApiIntegration(i: DbIntegration): ApiIntegration {
     id: i.id,
     url: i.url,
     enabled: i.enabled,
+    executor: i.executor === "server" ? "server" : "client",
     createdAt: i.createdAt,
   };
 }
@@ -791,7 +795,7 @@ app.post("/ingest", async (c) => {
 
   // La app debe existir en el catálogo (por package).
   const app2 = await db.select().from(apps).where(eq(apps.package, pkg)).get();
-  if (!app2) return c.json({ matched: 0 });
+  if (!app2) return c.json({ matched: 0, clientRequests: [] });
 
   // Canales del usuario que enrutan DESDE este dispositivo y apuntan a esta app.
   const routedChannelIds = await db
@@ -799,7 +803,7 @@ app.post("/ingest", async (c) => {
     .from(channelDevices)
     .where(eq(channelDevices.deviceId, deviceId))
     .all();
-  if (routedChannelIds.length === 0) return c.json({ matched: 0 });
+  if (routedChannelIds.length === 0) return c.json({ matched: 0, clientRequests: [] });
 
   const appChannelIds = new Set(
     (
@@ -814,7 +818,7 @@ app.post("/ingest", async (c) => {
   const candidateIds = routedChannelIds
     .map((r) => r.channelId)
     .filter((id) => appChannelIds.has(id));
-  if (candidateIds.length === 0) return c.json({ matched: 0 });
+  if (candidateIds.length === 0) return c.json({ matched: 0, clientRequests: [] });
 
   const when = postedAt ? new Date(postedAt) : new Date();
   const candidates = await db
@@ -825,6 +829,9 @@ app.post("/ingest", async (c) => {
 
   const now = new Date().toISOString();
   let matched = 0;
+  const clientRequests: ApiIntegrationWebhookRequest[] = [];
+  const apiDevice = toApiDevice(device, await deviceAppsList(db, device.id));
+  const apiApp = { id: app2.id, package: app2.package, label: app2.label };
   for (const ch of candidates) {
     // El canal debe ser del usuario, estar activo y dentro de su horario.
     if (ch.publisherId !== me.id) continue;
@@ -842,15 +849,22 @@ app.post("/ingest", async (c) => {
     await db.insert(channelNotifications).values(notif);
     matched++;
 
+    const source: IntegrationSource = {
+      kind: "ingest",
+      route: "/ingest",
+      postedAt: postedAt ?? null,
+      device: apiDevice,
+      app: apiApp,
+      package: pkg,
+    };
+    clientRequests.push(
+      ...(await clientNotificationIntegrationRequests(db, ch.id, notif, me, source)),
+    );
+
     c.executionCtx?.waitUntil?.(
-      postNotificationIntegrations(db, ch.id, notif, me, {
-        kind: "ingest",
-        route: "/ingest",
-        postedAt: postedAt ?? null,
-        device: toApiDevice(device, await deviceAppsList(db, device.id)),
-        app: { id: app2.id, package: app2.package, label: app2.label },
-        package: pkg,
-      }).catch((e) => console.warn("integración falló:", e)),
+      postNotificationIntegrations(db, ch.id, notif, me, source).catch((e) =>
+        console.warn("integración falló:", e),
+      ),
     );
 
     if (fcmConfigured(c.env) || c.env.PUSH_SERVER_URL) {
@@ -862,7 +876,7 @@ app.post("/ingest", async (c) => {
     }
   }
 
-  return c.json({ matched });
+  return c.json({ matched, clientRequests });
 });
 
 /* ----- dispositivos ----- */
@@ -1102,7 +1116,12 @@ async function setChannelIntegrations(
   for (const input of inputs) {
     const url = input.url.trim();
     if (!url) continue;
-    unique.set(url, { id: input.id, url, enabled: input.enabled });
+    unique.set(url, {
+      id: input.id,
+      url,
+      enabled: input.enabled,
+      executor: input.executor,
+    });
   }
   const now = new Date().toISOString();
   const values = [...unique.values()].map((input) => {
@@ -1112,6 +1131,7 @@ async function setChannelIntegrations(
       channelId,
       url: input.url,
       enabled: input.enabled,
+      executor: input.executor,
       createdAt: previous?.createdAt ?? now,
     };
   });
@@ -1137,6 +1157,19 @@ type IntegrationSource =
       app: ApiApp;
       package: string;
     };
+
+type IntegrationPayloadBase = {
+  event: typeof INTEGRATION_EVENT;
+  deliveredAt: string;
+  actor: ApiUser;
+  channel: Omit<ApiChannel, "notifications" | "integrations">;
+  notification: ApiNotification;
+  routing: {
+    devices: ApiDevice[];
+    apps: ApiApp[];
+  };
+  source: IntegrationSource;
+};
 
 function toApiApp(a: DbApp): ApiApp {
   return { id: a.id, package: a.package, label: a.label };
@@ -1171,32 +1204,95 @@ async function postNotificationIntegrations(
   actor: DbUser,
   source: IntegrationSource,
 ): Promise<void> {
-  const rows = await db
+  const rows = await activeChannelIntegrations(db, channelId, "server");
+  if (rows.length === 0) return;
+
+  const payloadBase = await notificationIntegrationPayloadBase(
+    db,
+    channelId,
+    notification,
+    actor,
+    source,
+  );
+  if (!payloadBase) return;
+
+  await Promise.all(
+    rows.map((integration) =>
+      postIntegrationRequest(integration, integrationWebhookBody(payloadBase, integration)),
+    ),
+  );
+}
+
+async function clientNotificationIntegrationRequests(
+  db: Db,
+  channelId: string,
+  notification: DbNotification,
+  actor: DbUser,
+  source: IntegrationSource,
+): Promise<ApiIntegrationWebhookRequest[]> {
+  const rows = await activeChannelIntegrations(db, channelId, "client");
+  if (rows.length === 0) return [];
+
+  const payloadBase = await notificationIntegrationPayloadBase(
+    db,
+    channelId,
+    notification,
+    actor,
+    source,
+  );
+  if (!payloadBase) return [];
+
+  return rows.map((integration) => {
+    const body = integrationWebhookBody(payloadBase, integration);
+    return {
+      id: integration.id,
+      url: integration.url,
+      event: INTEGRATION_EVENT,
+      headers: integrationRequestHeaders(integration, JSON.stringify(body)),
+      body,
+    };
+  });
+}
+
+async function activeChannelIntegrations(
+  db: Db,
+  channelId: string,
+  executor: "client" | "server",
+): Promise<DbIntegration[]> {
+  return db
     .select()
     .from(channelIntegrations)
     .where(
       and(
         eq(channelIntegrations.channelId, channelId),
         eq(channelIntegrations.enabled, true),
+        eq(channelIntegrations.executor, executor),
       ),
     )
     .all();
-  if (rows.length === 0) return;
+}
 
+async function notificationIntegrationPayloadBase(
+  db: Db,
+  channelId: string,
+  notification: DbNotification,
+  actor: DbUser,
+  source: IntegrationSource,
+): Promise<IntegrationPayloadBase | null> {
   const channel = await db
     .select()
     .from(channels)
     .where(eq(channels.id, channelId))
     .get();
-  if (!channel) return;
+  if (!channel) return null;
 
   const [apiChannel] = await assembleChannels(db, channel.publisherId, channelId);
-  if (!apiChannel) return;
+  if (!apiChannel) return null;
 
   const { notifications: _notifications, integrations: _integrations, ...channelBody } =
     apiChannel;
-  const payloadBase = {
-    event: "channel.notification.created",
+  return {
+    event: INTEGRATION_EVENT,
     deliveredAt: new Date().toISOString(),
     actor: toApiUser(actor),
     channel: channelBody,
@@ -1207,32 +1303,39 @@ async function postNotificationIntegrations(
     },
     source,
   };
+}
 
-  await Promise.all(
-    rows.map((integration) =>
-      postIntegrationRequest(integration, {
-        ...payloadBase,
-        integration: toApiIntegration(integration),
-      }),
-    ),
-  );
+function integrationWebhookBody(
+  payloadBase: IntegrationPayloadBase,
+  integration: DbIntegration,
+): Record<string, unknown> {
+  return {
+    ...payloadBase,
+    integration: toApiIntegration(integration),
+  };
+}
+
+function integrationRequestHeaders(
+  integration: DbIntegration,
+  body: string,
+): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-Yapi-Event": INTEGRATION_EVENT,
+    "X-Yapi-Integration-Id": integration.id,
+    "X-Yapi-Payload-Bytes": String(new TextEncoder().encode(body).byteLength),
+  };
 }
 
 async function postIntegrationRequest(
   integration: DbIntegration,
-  payload: unknown,
+  payload: Record<string, unknown>,
 ): Promise<void> {
   const body = JSON.stringify(payload);
-  const bodyBytes = new TextEncoder().encode(body).byteLength;
   try {
     const res = await fetch(integration.url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Yapi-Event": "channel.notification.created",
-        "X-Yapi-Integration-Id": integration.id,
-        "X-Yapi-Payload-Bytes": String(bodyBytes),
-      },
+      headers: integrationRequestHeaders(integration, body),
       body: new Blob([body], { type: "application/json" }),
     });
     if (!res.ok) {

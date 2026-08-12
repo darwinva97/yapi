@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
@@ -76,11 +77,72 @@ class YapiNotificationListenerService : NotificationListenerService() {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                Log.i(TAG, "ingest resp ${response.code} para $pkg")
-                response.close()
+                response.use {
+                    val responseText = it.body?.string().orEmpty()
+                    Log.i(TAG, "ingest resp ${it.code} para $pkg")
+                    if (it.isSuccessful) postClientRequests(responseText)
+                }
             }
         })
     }
+
+    private fun postClientRequests(responseText: String) {
+        if (responseText.isBlank()) return
+        val requests = runCatching {
+            JSONObject(responseText).optJSONArray("clientRequests")
+        }.getOrNull() ?: return
+
+        for (i in 0 until requests.length()) {
+            val request = requests.optJSONObject(i) ?: continue
+            postClientRequest(request)
+        }
+    }
+
+    private fun postClientRequest(request: JSONObject) {
+        val id = request.optString("id", "")
+        val url = request.optString("url", "")
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return
+
+        val body = jsonString(request.opt("body"))
+        val builder = Request.Builder().url(url)
+        val headers = request.optJSONObject("headers")
+        if (headers != null) {
+            val keys = headers.keys()
+            while (keys.hasNext()) {
+                val name = keys.next()
+                if (name.equals("Content-Type", ignoreCase = true)) continue
+                if (name.equals("Content-Length", ignoreCase = true)) continue
+                if (name.equals("Host", ignoreCase = true)) continue
+                if (name.equals("X-Yapi-Payload-Bytes", ignoreCase = true)) continue
+                val value = headers.optString(name, "")
+                if (value.isNotBlank()) builder.addHeader(name, value)
+            }
+        }
+
+        val outbound = builder
+            .addHeader("X-Yapi-Payload-Bytes", body.toByteArray(Charsets.UTF_8).size.toString())
+            .post(body.toRequestBody(JSON))
+            .build()
+        http.newCall(outbound).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.w(TAG, "webhook cliente falló para ${id.ifBlank { url }}", e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    Log.i(TAG, "webhook cliente resp ${it.code} para ${id.ifBlank { url }}")
+                }
+            }
+        })
+    }
+
+    private fun jsonString(value: Any?): String =
+        when (value) {
+            null, JSONObject.NULL -> "{}"
+            is JSONObject -> value.toString()
+            is JSONArray -> value.toString()
+            else -> JSONObject().put("value", value).toString()
+        }
 
     companion object {
         private const val TAG = "YapiIngest"

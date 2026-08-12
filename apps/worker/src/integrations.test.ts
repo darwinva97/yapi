@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { createLocalClient, type LocalDatabase } from "@yapi/db";
-import type { Channel, Device } from "@yapi/contract";
+import type { Channel, Device, IntegrationWebhookRequest } from "@yapi/contract";
 
 const state = vi.hoisted(() => ({
   db: undefined as unknown,
@@ -112,6 +112,7 @@ const SCHEMA = [
     channel_id text NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
     url text NOT NULL,
     enabled integer NOT NULL DEFAULT true,
+    executor text NOT NULL DEFAULT 'client',
     created_at text NOT NULL
   )`,
   `CREATE TABLE push_log (
@@ -226,7 +227,7 @@ describe("webhook público de ejemplo", () => {
 });
 
 describe("integraciones POST del worker", () => {
-  it("publica cada notificación manual en las integraciones activas del canal", async () => {
+  it("publica cada notificación manual en las integraciones server activas del canal", async () => {
     const posts = captureIntegrationPosts();
     const channel = await createChannel({
       name: "Alertas",
@@ -236,9 +237,9 @@ describe("integraciones POST del worker", () => {
       deviceIds: [],
       appIds: [],
       integrations: [
-        { url: "https://hooks.test/primary", enabled: true },
-        { url: "https://hooks.test/paused", enabled: false },
-        { url: "https://hooks.test/secondary", enabled: true },
+        { url: "https://hooks.test/primary", enabled: true, executor: "server" },
+        { url: "https://hooks.test/paused", enabled: false, executor: "server" },
+        { url: "https://hooks.test/secondary", enabled: true, executor: "server" },
       ],
     });
 
@@ -290,12 +291,47 @@ describe("integraciones POST del worker", () => {
           route: "/channels/:id/notifications",
           pushRequested: false,
         },
-        integration: { enabled: true },
+        integration: { enabled: true, executor: "server" },
       });
     }
   });
 
-  it("publica una notificación ingresada por /ingest con datos de dispositivo y app", async () => {
+  it("no publica desde Cloudflare las integraciones client por defecto", async () => {
+    const posts = captureIntegrationPosts();
+    const channel = await createChannel({
+      name: "Alertas cliente",
+      description: "",
+      enabled: true,
+      subscriberIds: [],
+      deviceIds: [],
+      appIds: [],
+      integrations: [{ url: "https://hooks.test/client-default", enabled: true }],
+    });
+
+    const ctx = executionContext();
+    const res = await app.request(
+      `/channels/${channel.id}/notifications`,
+      {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          id: channel.id,
+          title: "Pago recibido",
+          description: "Pedido #456",
+          sourceApp: "yapi",
+        }),
+      },
+      { DB: {} as never },
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    await Promise.all(ctx.tasks);
+
+    expect(channel.integrations[0]?.executor).toBe("client");
+    expect(posts).toEqual([]);
+  });
+
+  it("devuelve las integraciones client en /ingest y publica solo las server", async () => {
     const posts = captureIntegrationPosts();
     const { body: device, res: deviceRes } = await authedRequest<Device>("/devices", {
       name: "Pixel",
@@ -312,11 +348,17 @@ describe("integraciones POST del worker", () => {
       subscriberIds: [],
       deviceIds: [device.id],
       appIds: [appId],
-      integrations: [{ url: "https://hooks.test/ingest", enabled: true }],
+      integrations: [
+        { url: "https://hooks.test/ingest-server", enabled: true, executor: "server" },
+        { url: "https://hooks.test/ingest-client", enabled: true },
+      ],
     });
 
     const ctx = executionContext();
-    const { body: ingest, res } = await authedRequest<{ matched: number }>(
+    const { body: ingest, res } = await authedRequest<{
+      matched: number;
+      clientRequests: IntegrationWebhookRequest[];
+    }>(
       "/ingest",
       {
         deviceId: device.id,
@@ -329,10 +371,34 @@ describe("integraciones POST del worker", () => {
     );
     expect(res.status).toBe(200);
     expect(ingest.matched).toBe(1);
+    expect(ingest.clientRequests).toHaveLength(1);
+    expect(ingest.clientRequests[0]).toMatchObject({
+      url: "https://hooks.test/ingest-client",
+      event: "channel.notification.created",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Yapi-Event": "channel.notification.created",
+        "X-Yapi-Payload-Bytes": expect.any(String),
+      },
+      body: {
+        event: "channel.notification.created",
+        channel: { id: channel.id, name: "Correo" },
+        notification: {
+          title: "Nuevo correo",
+          description: "Contenido visible",
+          sourceApp: "Mail Test",
+        },
+        integration: {
+          url: "https://hooks.test/ingest-client",
+          enabled: true,
+          executor: "client",
+        },
+      },
+    });
     await Promise.all(ctx.tasks);
 
     expect(posts).toHaveLength(1);
-    expect(posts[0]!.url).toBe("https://hooks.test/ingest");
+    expect(posts[0]!.url).toBe("https://hooks.test/ingest-server");
     expect(posts[0]!.body).toMatchObject({
       event: "channel.notification.created",
       channel: { id: channel.id, name: "Correo" },
@@ -353,7 +419,11 @@ describe("integraciones POST del worker", () => {
         device: { id: device.id, name: "Pixel" },
         app: { id: appId, package: "com.test.mail", label: "Mail Test" },
       },
-      integration: { url: "https://hooks.test/ingest", enabled: true },
+      integration: {
+        url: "https://hooks.test/ingest-server",
+        enabled: true,
+        executor: "server",
+      },
     });
   });
 });

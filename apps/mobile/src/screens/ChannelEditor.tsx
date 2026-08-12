@@ -20,6 +20,7 @@ type IntegrationDraft = {
   id?: string;
   url: string;
   enabled: boolean;
+  executor: "client" | "server";
   createdAt?: string;
 };
 
@@ -43,6 +44,7 @@ function integrationDraftFromApi(i: ChannelIntegration): IntegrationDraft {
     id: i.id,
     url: i.url,
     enabled: i.enabled,
+    executor: i.executor,
     createdAt: i.createdAt,
   };
 }
@@ -52,6 +54,7 @@ function newIntegrationDraft(index: number): IntegrationDraft {
     localId: `new-${Date.now()}-${index}`,
     url: "",
     enabled: true,
+    executor: "client",
   };
 }
 
@@ -137,6 +140,15 @@ export function ChannelEditor({
       prev.map((item) =>
         item.localId === localId ? { ...item, enabled: !item.enabled } : item,
       ),
+    );
+  }
+
+  function updateIntegrationExecutor(
+    localId: string,
+    executor: IntegrationDraft["executor"],
+  ) {
+    setIntegrations((prev) =>
+      prev.map((item) => (item.localId === localId ? { ...item, executor } : item)),
     );
   }
 
@@ -235,6 +247,7 @@ export function ChannelEditor({
       id: item.id,
       url: item.url.trim(),
       enabled: item.enabled,
+      executor: item.executor,
     }));
     try {
       if (channel) {
@@ -416,6 +429,7 @@ export function ChannelEditor({
             onAdd={addIntegration}
             onChangeUrl={updateIntegrationUrl}
             onToggle={toggleIntegration}
+            onChangeExecutor={updateIntegrationExecutor}
             onRemove={removeIntegration}
           />
         ) : null}
@@ -1316,6 +1330,7 @@ function IntegrationsSection({
   onAdd,
   onChangeUrl,
   onToggle,
+  onChangeExecutor,
   onRemove,
 }: {
   editable: boolean;
@@ -1323,6 +1338,10 @@ function IntegrationsSection({
   onAdd: () => void;
   onChangeUrl: (localId: string, url: string) => void;
   onToggle: (localId: string) => void;
+  onChangeExecutor: (
+    localId: string,
+    executor: IntegrationDraft["executor"],
+  ) => void;
   onRemove: (localId: string) => void;
 }) {
   return (
@@ -1469,10 +1488,90 @@ function IntegrationsSection({
               bindinput={(e: InputEvent) => onChangeUrl(item.localId, e.detail.value)}
             />
           ) : (
-            <text style={{ color: colors.textSecondary, fontSize: "13px", lineHeight: "18px" }}>
-              {item.url}
-            </text>
+            <>
+              <text style={{ color: colors.textSecondary, fontSize: "13px", lineHeight: "18px" }}>
+                {item.url}
+              </text>
+              <text style={{ color: colors.textMuted, fontSize: "12px", marginTop: "8px" }}>
+                Ejecuta: {item.executor === "server" ? "Servidor" : "Cliente"}
+              </text>
+            </>
           )}
+
+          {editable ? (
+            <view style={{ marginBottom: "10px" }}>
+              <text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  marginBottom: "6px",
+                }}
+              >
+                Ejecutar desde
+              </text>
+              <view
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  backgroundColor: colors.surfaceMuted,
+                  borderRadius: "10px",
+                  padding: "4px",
+                }}
+              >
+                <Pressable
+                  label={`Ejecutar petición POST ${index + 1} desde el cliente`}
+                  onTap={() => onChangeExecutor(item.localId, "client")}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "34px",
+                    borderRadius: "8px",
+                    backgroundColor:
+                      item.executor === "client" ? colors.surface : "transparent",
+                  }}
+                >
+                  <text
+                    accessibility-elements-hidden={true}
+                    style={{
+                      color:
+                        item.executor === "client" ? colors.text : colors.textMuted,
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Cliente
+                  </text>
+                </Pressable>
+                <Pressable
+                  label={`Ejecutar petición POST ${index + 1} desde el servidor`}
+                  onTap={() => onChangeExecutor(item.localId, "server")}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "34px",
+                    borderRadius: "8px",
+                    backgroundColor:
+                      item.executor === "server" ? colors.surface : "transparent",
+                  }}
+                >
+                  <text
+                    accessibility-elements-hidden={true}
+                    style={{
+                      color:
+                        item.executor === "server" ? colors.text : colors.textMuted,
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Servidor
+                  </text>
+                </Pressable>
+              </view>
+            </view>
+          ) : null}
 
           {editable ? (
             <Pressable

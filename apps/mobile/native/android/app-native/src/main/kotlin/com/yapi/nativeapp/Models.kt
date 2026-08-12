@@ -49,6 +49,7 @@ data class ChannelIntegration(
     val id: String,
     val url: String,
     val enabled: Boolean,
+    val executor: String = "client",
     val createdAt: String,
 )
 

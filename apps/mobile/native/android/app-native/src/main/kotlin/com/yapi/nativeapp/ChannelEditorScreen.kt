@@ -61,11 +61,15 @@ import kotlinx.coroutines.launch
 
 private enum class EditorTab(val label: String) { Info("Información"), Users("Usuarios"), Integrations("Integraciones"), Notifs("Notificaciones") }
 
+private const val EXECUTOR_CLIENT = "client"
+private const val EXECUTOR_SERVER = "server"
+
 private data class IntegrationDraft(
     val key: String,
     val id: String? = null,
     val url: String = "",
     val enabled: Boolean = true,
+    val executor: String = EXECUTOR_CLIENT,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,7 +97,13 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
     var integrations by remember {
         mutableStateOf(
             channel?.integrations?.map {
-                IntegrationDraft(key = it.id, id = it.id, url = it.url, enabled = it.enabled)
+                IntegrationDraft(
+                    key = it.id,
+                    id = it.id,
+                    url = it.url,
+                    enabled = it.enabled,
+                    executor = if (it.executor == EXECUTOR_SERVER) EXECUTOR_SERVER else EXECUTOR_CLIENT,
+                )
             } ?: emptyList(),
         )
     }
@@ -143,7 +153,12 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
             schedEnd.ifBlank { null },
         )
         val integrationReqs = integrations.map {
-            Api.ChannelIntegrationReq(id = it.id, url = it.url.trim(), enabled = it.enabled)
+            Api.ChannelIntegrationReq(
+                id = it.id,
+                url = it.url.trim(),
+                enabled = it.enabled,
+                executor = if (it.executor == EXECUTOR_SERVER) EXECUTOR_SERVER else EXECUTOR_CLIENT,
+            )
         }
         scope.launch {
             try {
@@ -247,6 +262,11 @@ fun ChannelEditorScreen(channel: Channel?, onClose: (changed: Boolean) -> Unit) 
                     },
                     onToggle = { key ->
                         integrations = integrations.map { if (it.key == key) it.copy(enabled = !it.enabled) else it }
+                    },
+                    onExecutor = { key, executor ->
+                        integrations = integrations.map {
+                            if (it.key == key) it.copy(executor = executor) else it
+                        }
                     },
                     onRemove = { key -> integrations = integrations.filterNot { it.key == key } },
                 )
@@ -400,6 +420,7 @@ private fun IntegrationsTab(
     onAdd: () -> Unit,
     onUrl: (String, String) -> Unit,
     onToggle: (String) -> Unit,
+    onExecutor: (String, String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -444,8 +465,55 @@ private fun IntegrationsTab(
             Spacer(Modifier.height(10.dp))
             EditorInput(item.url, { onUrl(item.key, it) }, "https://api.ejemplo.com/webhook", surface = Yapi.surfaceInput)
             Spacer(Modifier.height(8.dp))
+            Text("Ejecutar desde", color = Yapi.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Yapi.surfaceMuted)
+                    .padding(4.dp),
+            ) {
+                IntegrationExecutorOption(
+                    label = "Cliente",
+                    selected = item.executor != EXECUTOR_SERVER,
+                    onClick = { onExecutor(item.key, EXECUTOR_CLIENT) },
+                    modifier = Modifier.weight(1f),
+                )
+                IntegrationExecutorOption(
+                    label = "Servidor",
+                    selected = item.executor == EXECUTOR_SERVER,
+                    onClick = { onExecutor(item.key, EXECUTOR_SERVER) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Text("Eliminar", color = Yapi.danger, fontSize = 13.sp, modifier = Modifier.clickable { onRemove(item.key) })
         }
+    }
+}
+
+@Composable
+private fun IntegrationExecutorOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) Yapi.surface else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (selected) Yapi.text else Yapi.textMuted,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

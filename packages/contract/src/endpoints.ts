@@ -227,5 +227,5 @@ export const endpoints = {
 export type Endpoints = typeof endpoints;
 export type EndpointName = keyof Endpoints;
 
-export type InputOf<K extends EndpointName> = z.infer<Endpoints[K]["input"]>;
-export type OutputOf<K extends EndpointName> = z.infer<Endpoints[K]["output"]>;
+export type InputOf<K extends EndpointName> = z.input<Endpoints[K]["input"]>;
+export type OutputOf<K extends EndpointName> = z.output<Endpoints[K]["output"]>;

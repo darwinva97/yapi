@@ -58,6 +58,7 @@ const CHANNEL_BODY = {
       id: "i1",
       url: "https://hooks.test/yapi",
       enabled: true,
+      executor: "client",
       createdAt: "2026-01-01T00:00:00.000Z",
     },
   ],
@@ -144,9 +145,12 @@ describe("createClient", () => {
 
       expect(lastCall().url).toBe("http://w.test/channels");
       expect(JSON.parse(lastCall().init.body as string)).toMatchObject({
-        integrations: [{ url: "https://hooks.test/yapi", enabled: true }],
+        integrations: [
+          { url: "https://hooks.test/yapi", enabled: true, executor: "client" },
+        ],
       });
       expect(res.integrations[0]?.url).toBe("https://hooks.test/yapi");
+      expect(res.integrations[0]?.executor).toBe("client");
     });
   });
 

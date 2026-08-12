@@ -14,8 +14,8 @@ android {
         applicationId = "com.yapi.nativeapp"
         minSdk = 24
         targetSdk = 34
-        versionCode = 14
-        versionName = "0.1.14"
+        versionCode = 15
+        versionName = "0.1.15"
     }
 
     buildFeatures {

@@ -1,0 +1,1 @@
+ALTER TABLE `channel_integrations` ADD `executor` text DEFAULT 'client' NOT NULL;
