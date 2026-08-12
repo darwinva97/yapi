@@ -265,8 +265,14 @@ describe("integraciones POST del worker", () => {
       expect(post.init.method).toBe("POST");
       expect(post.init.headers).toMatchObject({
         "Content-Type": "application/json",
+        "Content-Length": expect.any(String),
         "X-Yapi-Event": "channel.notification.created",
+        "X-Yapi-Payload-Bytes": expect.any(String),
       });
+      expect(Number((post.init.headers as Record<string, string>)["Content-Length"])).toBeGreaterThan(0);
+      expect((post.init.headers as Record<string, string>)["Content-Length"]).toBe(
+        (post.init.headers as Record<string, string>)["X-Yapi-Payload-Bytes"],
+      );
       expect(post.body.channel).not.toHaveProperty("integrations");
       expect(post.body.channel).not.toHaveProperty("notifications");
       expect(post.body).toMatchObject({

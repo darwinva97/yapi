@@ -427,6 +427,7 @@ app.get("/webhooks/example", (c) =>
 
 app.post("/webhooks/example", async (c) => {
   const contentType = c.req.header("Content-Type") ?? "";
+  const contentLength = c.req.header("Content-Length") ?? "";
   const rawBody = await c.req.text();
   let body: unknown = rawBody;
   if (contentType.toLowerCase().includes("application/json")) {
@@ -445,6 +446,8 @@ app.post("/webhooks/example", async (c) => {
     event: c.req.header("X-Yapi-Event") ?? null,
     integrationId: c.req.header("X-Yapi-Integration-Id") ?? null,
     contentType: contentType || null,
+    contentLength: contentLength || null,
+    payloadBytes: c.req.header("X-Yapi-Payload-Bytes") ?? null,
     body,
   });
 });
@@ -1219,15 +1222,19 @@ async function postIntegrationRequest(
   integration: DbIntegration,
   payload: unknown,
 ): Promise<void> {
+  const body = JSON.stringify(payload);
+  const bodyBytes = new TextEncoder().encode(body).byteLength;
   try {
     const res = await fetch(integration.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Content-Length": String(bodyBytes),
         "X-Yapi-Event": "channel.notification.created",
         "X-Yapi-Integration-Id": integration.id,
+        "X-Yapi-Payload-Bytes": String(bodyBytes),
       },
-      body: JSON.stringify(payload),
+      body,
     });
     if (!res.ok) {
       console.warn(`integración ${integration.id} respondió ${res.status}`);
